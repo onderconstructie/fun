@@ -13,8 +13,8 @@ export class Camera {
     this.fov = (16 * Math.PI) / 180;
     this.pitch = (34 * Math.PI) / 180;
     this.pitchDeg = 34;
-    this.hDiv = 24;
-    this.wDiv = 50;
+    this.hDiv = 22;
+    this.wDiv = 46;
     this.yaw = -Math.PI / 2;
     this.tx = CX;
     this.ty = CY;

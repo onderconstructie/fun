@@ -1,5 +1,5 @@
 // Offline support: network-first (always fresh when online), cache fallback.
-const CACHE = 'gouden-elf-v2';
+const CACHE = 'gouden-elf-v3';
 const ASSETS = [
   './',
   'css/style.css',
@@ -19,6 +19,7 @@ const ASSETS = [
   'index.html',
   'js/audio.js',
   'js/data/formations.js',
+  'js/data/looks.js',
   'js/data/nations.js',
   'js/data/players.js',
   'js/data/teams.js',

@@ -3,7 +3,8 @@
 
 import { Camera, Director } from './camera.js';
 import { Stadium } from './stadium.js';
-import { basis, drawShadow, drawPlayer, drawBall } from './sprites.js';
+import { basis, drawShadow, drawPlayer, drawBall, setSpriteTime } from './sprites.js';
+import { lookFor } from '../data/looks.js';
 import { ST } from '../engine/player.js';
 import { CY } from '../engine/constants.js';
 
@@ -46,6 +47,7 @@ export class Renderer {
       players: match.players.map((p) => ({
         x: p.x, y: p.y, z: 0, fx: p.fx, fy: p.fy, state: 0, anim: 0, kickT: 0, speedNow: 0,
         team: p.team.index, isGK: p.isGK, name: p.name, number: p.number, diveWorld: undefined,
+        look: lookFor(p.card),
       })),
       ball: { x: match.ball.x, y: match.ball.y, z: 0, rot: 0 },
       kits: [
@@ -87,6 +89,7 @@ export class Renderer {
   draw(sc, opts = {}) {
     const ctx = this.ctx, cam = this.cam, st = this.stadium;
     this.time += 1 / 60;
+    setSpriteTime(this.time);
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     st.drawBackground(ctx, cam, opts.excitement || 0);
     st.drawPitch(ctx, cam);

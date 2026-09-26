@@ -5,6 +5,7 @@ import { ST } from './engine/player.js';
 import { Recorder, clipScene } from './engine/replay.js';
 import { CX, CY, L } from './engine/constants.js';
 import { Renderer } from './render/renderer.js';
+import { setSpriteLite } from './render/sprites.js';
 import { Controls } from './ui/controls.js';
 import { Hud } from './ui/hud.js';
 import { Sound } from './audio.js';
@@ -118,6 +119,8 @@ app.startMatch = (cfg) => {
   app.match = m;
   if (cfg.setup) cfg.setup(m);
   app.renderer.setMatch(m);
+  // A device found slow earlier keeps the light rendering.
+  if (app.perf.lite) app.renderer.stadium.lite = true;
   app.renderer.director.zoomPref = s.zoom;
   app.hud.setTeams(m);
   app.hud.radarOn = s.radar && cfg.mode !== 'penalties';
@@ -536,6 +539,8 @@ function trackPerf(dt) {
     resize();
   } else if (app.renderer.stadium && !app.renderer.stadium.lite) {
     app.renderer.stadium.lite = true;
+    pf.lite = true;
+    setSpriteLite(true);
   }
 }
 

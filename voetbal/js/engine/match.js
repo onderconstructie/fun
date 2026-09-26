@@ -270,7 +270,7 @@ export class Match {
       p.vy *= 0.9;
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.anim += p.speed * dt * 1.6;
+      if (p.speed > 0.3) p.anim += dt * (4.6 + p.speed * 1.05);
     }
   }
 
@@ -1744,7 +1744,8 @@ export class Match {
           p.fy = tmp[1];
         }
       }
-      p.anim += s * dt * 1.55;
+      // Gait phase: cadence rises with speed (about 2 steps/s walking, 4.5 sprinting).
+      if (s > 0.3) p.anim += dt * (4.6 + s * 1.05);
     }
     this.separate();
   }
