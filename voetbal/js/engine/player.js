@@ -119,18 +119,32 @@ export class Player {
     return Math.sqrt(this.vx * this.vx + this.vy * this.vy);
   }
 
-  // Seconds to get within `reach` of (x, y), accounting for current velocity,
-  // acceleration and top speed.
+  // Seconds to get within `reach` of (x, y), accounting for current velocity
+  // (sideways momentum has to be turned first), acceleration and top speed.
   timeTo(x, y, react = 0, reach = 0) {
     const dx = x - this.x, dy = y - this.y;
     const d0 = Math.sqrt(dx * dx + dy * dy);
     const d = d0 - reach;
     if (d <= 0) return react;
-    const v0 = Math.max(0, (this.vx * dx + this.vy * dy) / (d0 || 1));
-    const a = 8, v = this.vmax;
-    const dAcc = (v * v - v0 * v0) / (2 * a);
-    if (d < dAcc) return react + (-v0 + Math.sqrt(v0 * v0 + 2 * a * d)) / a;
-    return react + (v - v0) / a + (d - dAcc) / v;
+    const ux = dx / d0, uy = dy / d0;
+    const va = this.vx * ux + this.vy * uy; // speed towards the point
+    const vp = Math.abs(this.vx * uy - this.vy * ux); // sideways
+    const v = this.vmax;
+    // Braking (moving away) is quicker than accelerating.
+    const a = this.accel * (va < 0 ? 1 - (0.7 * va) / (v - va) : 1);
+    // movePlayers steers the velocity straight to v·u at rate a: the speed
+    // along u ramps from va to v over T1 while the sideways drift dies out.
+    const dv = Math.sqrt((v - va) * (v - va) + vp * vp);
+    if (dv < 1e-3) return react + d / v;
+    const T1 = dv / a;
+    const s1 = ((va + v) / 2) * T1;
+    if (d >= s1) {
+      const drift = (vp * T1) / 2;
+      return react + T1 + Math.sqrt((d - s1) * (d - s1) + drift * drift) / v;
+    }
+    const k = ((v - va) * a) / (2 * dv);
+    const t = k < 1e-4 ? d / Math.max(0.1, va) : (Math.sqrt(va * va + 4 * k * d) - va) / (2 * k);
+    return react + t + (vp * t - (vp * t * t) / (2 * T1)) / v;
   }
 
   canAct() {

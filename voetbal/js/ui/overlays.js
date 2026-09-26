@@ -87,10 +87,7 @@ export class Overlays {
         this.closeAll();
         app.startMatch(app.cfg);
       } else if (act === 'quit') {
-        if (app.cfg && app.cfg.mode === 'cup' && !confirm('Stoppen telt als verlies in de beker. Zeker weten?')) return;
-        if (app.cfg && app.cfg.onQuit) app.cfg.onQuit();
-        this.closeAll();
-        app.endMatch();
+        app.quitMatch();
       }
     });
   }

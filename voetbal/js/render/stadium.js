@@ -188,7 +188,7 @@ function makeCrowd(colors) {
     g.fillStyle = y % 16 ? '#121829' : '#151c30';
     g.fillRect(0, y, 256, 4);
   }
-  const palette = [...colors, '#e8e2d6', '#c9b79c', '#3b4252', '#e2e8f0', '#a3a3a3', '#f5d0a9', '#7c5a3a'];
+  const palette = [...colors, '#d8d2c6', '#b9a78c', '#3b4252', '#d2d8e0', '#939393', '#e5c099', '#6c4a2a'];
   let seed = 7;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   for (let y = 2; y < 128; y += 8) {
@@ -202,6 +202,9 @@ function makeCrowd(colors) {
       g.fillRect(jx + 0.6, jy, 2, 2); // head
     }
   }
+  // Slight shading for depth (baked, so no extra fill per frame).
+  g.fillStyle = 'rgba(3,6,14,0.25)';
+  g.fillRect(0, 0, 256, 128);
   return c;
 }
 
@@ -268,10 +271,13 @@ export class Stadium {
 
   drawBackground(ctx, cam, excitement = 0) {
     const w = cam.w, h = cam.h;
-    const sky = ctx.createLinearGradient(0, 0, 0, h * 0.6);
-    sky.addColorStop(0, '#05070d');
-    sky.addColorStop(1, '#10172a');
-    ctx.fillStyle = sky;
+    if (!this.sky || this.skyH !== h) {
+      this.sky = ctx.createLinearGradient(0, 0, 0, h * 0.6);
+      this.sky.addColorStop(0, '#05070d');
+      this.sky.addColorStop(1, '#10172a');
+      this.skyH = h;
+    }
+    ctx.fillStyle = this.sky;
     ctx.fillRect(0, 0, w, h);
 
     // Stands, farthest first.
@@ -295,27 +301,26 @@ export class Stadium {
         m.scaleSelf(sc, sc);
         this.crowdPattern.setTransform(m);
       }
-      ctx.fillStyle = this.crowdPattern;
-      ctx.fill();
-      // Darken the upper tiers for depth.
-      ctx.fillStyle = 'rgba(3,6,14,0.28)';
+      ctx.fillStyle = this.lite ? '#1a2033' : this.crowdPattern;
       ctx.fill();
     }
-    // Floodlight haze.
-    const haze = ctx.createRadialGradient(w * 0.5, -h * 0.2, 10, w * 0.5, -h * 0.2, h * 1.1);
-    haze.addColorStop(0, 'rgba(255,255,235,0.10)');
-    haze.addColorStop(1, 'rgba(255,255,235,0)');
-    ctx.fillStyle = haze;
-    ctx.fillRect(0, 0, w, h);
+    if (this.lite) return;
+    // Floodlight haze (only over the upper part of the screen).
+    if (!this.haze || this.hazeW !== w || this.hazeH !== h) {
+      this.haze = ctx.createRadialGradient(w * 0.5, -h * 0.2, 10, w * 0.5, -h * 0.2, h * 1.1);
+      this.haze.addColorStop(0, 'rgba(255,255,235,0.10)');
+      this.haze.addColorStop(1, 'rgba(255,255,235,0)');
+      this.hazeW = w;
+      this.hazeH = h;
+    }
+    ctx.fillStyle = this.haze;
+    ctx.fillRect(0, 0, w, h * 0.55);
   }
 
   drawPitch(ctx, cam) {
+    // Light stripes are one big quad; dark stripes are drawn on top.
     ctx.beginPath();
     this.poly(ctx, cam, this.surround);
-    ctx.fillStyle = '#2f7a35';
-    ctx.fill();
-    ctx.beginPath();
-    for (const q of this.stripes[0]) this.poly(ctx, cam, q);
     ctx.fillStyle = '#3a8f3f';
     ctx.fill();
     ctx.beginPath();

@@ -155,6 +155,14 @@ app.endMatch = () => {
   showMenu(app.cfg && app.cfg.returnTo ? app.cfg.returnTo : 's-home');
 };
 
+// Leave the match from the pause menu or the rotate-device screen.
+app.quitMatch = () => {
+  if (app.cfg && app.cfg.mode === 'cup' && !confirm('Stoppen telt als verlies in de beker. Zeker weten?')) return;
+  if (app.cfg && app.cfg.onQuit) app.cfg.onQuit();
+  app.overlays.closeAll();
+  app.endMatch();
+};
+
 app.pause = (why) => {
   if (app.state !== 'match' || app.paused || !app.match) return;
   if (app.match.phase === 'fulltime') return;
@@ -513,17 +521,21 @@ function renderReplay(dt) {
   app.hud.update(m, dt, null);
 }
 
-// Adaptive resolution: drop DPR when frames are slow.
+// Adaptive quality: lower the canvas resolution (then detail) when frames are slow.
 function trackPerf(dt) {
   const pf = app.perf;
   pf.samples.push(dt);
-  if (pf.samples.length < 120) return;
+  if (pf.samples.length < 90) return;
   pf.samples.sort((a, b) => a - b);
-  const med = pf.samples[60];
+  const med = pf.samples[45];
   pf.samples.length = 0;
-  if (med > 0.024 && pf.dpr > 1) {
-    pf.dpr = Math.max(1, pf.dpr - 0.5);
+  if (med < 0.021) return;
+  const cur = Math.min(window.devicePixelRatio || 1, pf.dpr);
+  if (cur > 1) {
+    pf.dpr = Math.max(1, cur - 0.25);
     resize();
+  } else if (app.renderer.stadium && !app.renderer.stadium.lite) {
+    app.renderer.stadium.lite = true;
   }
 }
 
@@ -575,6 +587,9 @@ function boot() {
   window.addEventListener('keydown', unlock);
 
   $('#btn-pause').addEventListener('click', () => app.pause());
+  $('#rot-quit').addEventListener('click', () => {
+    if (app.state === 'match') app.quitMatch();
+  });
   $('#pitch').addEventListener('pointerdown', () => {
     if (app.replay) endReplay();
   });

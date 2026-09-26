@@ -11,7 +11,7 @@ const KEY = 'gouden-elf-v1';
 export const DEFAULT_SETTINGS = {
   sound: true,
   vibration: true,
-  difficulty: 'pro',
+  difficulty: 'amateur',
   duration: 5,
   zoom: 1,
   autoSwitch: true,

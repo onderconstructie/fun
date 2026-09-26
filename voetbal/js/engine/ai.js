@@ -8,28 +8,32 @@ import { groundSpeedFor, groundTime } from './kick.js';
 import { clamp, dist, sigmoid, segPoint } from '../util.js';
 
 export const PROFILES = {
-  amateur: { tempo: 0.7, react: 0.48, noise: 0.5, passErr: 1.6, shotErr: 1.45, press: 0.45, tackle: 0.5, gkReact: 1.35, speed: 0.92, run: 0.25, shootBias: 0.85, risk: 1.4, mark: 0.55 },
-  pro: { tempo: 0.85, react: 0.33, noise: 0.3, passErr: 1.22, shotErr: 1.15, press: 0.7, tackle: 0.72, gkReact: 1.12, speed: 0.97, run: 0.45, shootBias: 1.0, risk: 1.15, mark: 0.78 },
-  wereldklasse: { tempo: 1, react: 0.25, noise: 0.17, passErr: 1.0, shotErr: 1.0, press: 0.86, tackle: 0.88, gkReact: 1.0, speed: 1.0, run: 0.65, shootBias: 1.0, risk: 1.0, mark: 0.9 },
-  legende: { tempo: 1.1, react: 0.18, noise: 0.08, passErr: 0.88, shotErr: 0.9, press: 1.0, tackle: 1.0, gkReact: 0.92, speed: 1.02, run: 0.8, shootBias: 1.05, risk: 0.95, mark: 1.0 },
-  mate: { tempo: 1, react: 0.25, noise: 0.15, passErr: 1.0, shotErr: 1.0, press: 0.82, tackle: 0.85, gkReact: 1.0, speed: 1.0, run: 0.7, shootBias: 1.0, risk: 1.0, mark: 0.9 },
+  // caution: how much riskier the AI believes dribbling is (lower levels
+  // hesitate and recycle the ball instead of taking players on).
+  amateur: { tempo: 0.7, react: 0.55, noise: 0.5, passErr: 1.7, shotErr: 1.7, press: 0.35, tackle: 0.42, gkReact: 1.5, speed: 0.88, run: 0.25, shootBias: 0.85, risk: 1.4, mark: 0.4, lag: 0.7, caution: 1.9 },
+  pro: { tempo: 0.85, react: 0.36, noise: 0.3, passErr: 1.3, shotErr: 1.35, press: 0.6, tackle: 0.65, gkReact: 1.22, speed: 0.95, run: 0.45, shootBias: 1.0, risk: 1.15, mark: 0.72, lag: 0.48, caution: 1.65 },
+  wereldklasse: { tempo: 1, react: 0.25, noise: 0.17, passErr: 1.0, shotErr: 1.08, press: 0.86, tackle: 0.88, gkReact: 1.0, speed: 1.0, run: 0.65, shootBias: 1.0, risk: 1.0, mark: 0.9, lag: 0.3, caution: 1.25 },
+  legende: { tempo: 1.1, react: 0.18, noise: 0.08, passErr: 0.88, shotErr: 0.9, press: 1.0, tackle: 1.0, gkReact: 0.92, speed: 1.02, run: 0.8, shootBias: 1.05, risk: 0.95, mark: 1.0, lag: 0.22, caution: 1.0 },
+  mate: { tempo: 1, react: 0.25, noise: 0.15, passErr: 1.0, shotErr: 1.0, press: 0.82, tackle: 0.85, gkReact: 1.0, speed: 1.0, run: 0.7, shootBias: 1.0, risk: 1.0, mark: 0.9, lag: 0.3, caution: 1.2 },
 };
 
 // Chance of scoring from an unpressured shot at local (lx, ly); goal at lx = L.
+// Fitted to the engine (good finisher vs good keeper, no pressure): ~80%
+// from 11 m, ~52% from 16 m, ~31% from 20 m, ~14% from 25 m.
 export function xgAt(lx, ly) {
   const dx = L - lx;
   if (dx < 0.3) return 0.02;
   const dy = Math.abs(ly - CY);
   const d = Math.sqrt(dx * dx + dy * dy);
   const angle = Math.abs(Math.atan2(dy + GOAL_HW, dx) - Math.atan2(dy - GOAL_HW, dx));
-  return sigmoid(-1.4 - 0.09 * d + 2.8 * angle);
+  return sigmoid(2.08 - 0.18 * d + 2.0 * angle);
 }
 
 // Threat of owning the ball at local (lx, ly).
 export function threat(lx, ly) {
   const dGoal = Math.sqrt((L - lx) * (L - lx) + (ly - CY) * (ly - CY));
   const f = clamp(1 - dGoal / 110, 0, 1);
-  return 0.008 + 0.06 * Math.pow(f, 2.2) + (dGoal < 40 ? 0.45 * xgAt(lx, ly) : 0);
+  return 0.008 + 0.06 * Math.pow(f, 2.2) + (dGoal < 40 ? 0.25 * xgAt(lx, ly) : 0);
 }
 
 // Time for a player standing still to cover distance d (reaction + acceleration).
@@ -40,13 +44,17 @@ export function reachTime(o, d, react) {
 }
 
 const DIRS = [0, 0.45, -0.45, 0.95, -0.95, 1.5, -1.5, 2.3, -2.3];
+// Box runs (local frame): near post, penalty spot, far post; y offsets are
+// towards the ball side.
+const BOX_X = [L - 6, L - 11, L - 7.5];
+const BOX_Y = [2.5, 0.5, -3.5];
 
 export class TeamAI {
   constructor(match, team, prof) {
     this.m = match;
     this.t = team;
     this.prof = prof;
-    this.stratT = Math.random() * 0.1;
+    this.stratT = match.rng() * 0.1;
     this.phase = 'loose';
     this.sp = {};
     this.offLine = CX;
@@ -87,13 +95,24 @@ export class TeamAI {
       } else if (lx > s2) s2 = lx;
     }
     this.offLine = Math.max(s2, CX);
+    // The defensive block follows the ball with a human delay.
+    const b = m.ball;
+    if (m.phase !== 'play' || this.bx === undefined) {
+      this.bx = b.x;
+      this.by = b.y;
+    } else {
+      const k = 1 - Math.exp(-0.1 / this.prof.lag);
+      this.bx += (b.x - this.bx) * k;
+      this.by += (b.y - this.by) * k;
+    }
     this.computeShape();
     if (m.phase === 'play') this.assignRoles();
   }
 
   computeShape() {
     const t = this.t, b = this.m.ball;
-    const blx = t.lx(b.x), bly = t.ly(b.y);
+    const def = this.phase === 'def';
+    const blx = t.lx(def ? this.bx : b.x), bly = t.ly(def ? this.by : b.y);
     let back, front, widthF, shiftF;
     if (this.phase === 'att') {
       back = clamp(0.6 * blx + 5, 10, 55);
@@ -112,11 +131,28 @@ export class TeamAI {
       shiftF = 0.32;
     }
     const onside = Math.max(this.offLine, blx) - 0.9;
+    // Final third: the most advanced players attack the box (near post,
+    // penalty spot, far post) so there is someone to cross or cut back to.
+    const boxRun = this.phase === 'att' && blx > 66 ? clamp((blx - 66) / 12, 0, 1) : 0;
+    const runners = this.runners || (this.runners = []);
+    runners.length = 0;
+    const side = bly < CY ? -1 : 1;
+    if (boxRun) {
+      // Ball side first: near post, then the spot, then the far post.
+      for (const p of t.players) if (!p.isGK && p.slot.d > 0.78 && p !== this.m.ball.owner) runners.push(p);
+      runners.sort((a, b) => (b.slot.l - a.slot.l) * side);
+      runners.length = Math.min(3, runners.length);
+    }
     for (const p of t.players) {
       if (p.isGK) continue;
       const s = p.slot;
       let lx = back + s.d * (front - back);
       let ly = CY + (s.l * W - CY) * widthF + (bly - CY) * shiftF;
+      const r = boxRun ? runners.indexOf(p) : -1;
+      if (r >= 0) {
+        lx += (BOX_X[r] - lx) * boxRun;
+        ly += (CY + side * BOX_Y[r] - ly) * boxRun;
+      }
       if (this.phase === 'att') lx = Math.min(lx, onside - (s.d > 0.6 ? 0 : 1.5));
       lx = clamp(lx, 4, L - 6);
       ly = clamp(ly, 2.5, W - 2.5);
@@ -227,7 +263,7 @@ export class TeamAI {
     for (const o of t.opp.players) {
       if (o.isGK || o === owner) continue;
       const lx = t.lx(o.x);
-      if (lx < 33) threats.push(o);
+      if (lx < 26) threats.push(o);
     }
     threats.sort((a, b) => t.lx(a.x) - t.lx(b.x));
     for (const o of threats) {
@@ -398,6 +434,16 @@ export class TeamAI {
     const dd = dist(p.x, p.y, tx, ty);
     const intensity = p.human ? 1 : this.prof.press;
     this.moveTo(p, tx, ty, dd > 1.5 && (intensity > 0.6 || dd < 12));
+    // Jockey: when goal-side and close, give ground slowly instead of sprinting away.
+    const dc = dist(p.x, p.y, c.x, c.y);
+    if (goalSide && dc < 6) {
+      const back = p.tvx * ux + p.tvy * uy; // speed towards own goal
+      const cap = p.jog * 0.62;
+      if (back > cap) {
+        p.tvx -= ux * (back - cap);
+        p.tvy -= uy * (back - cap);
+      }
+    }
     if (!p.human && intensity < 0.8 && dd > 6) {
       p.tvx *= 0.6 + intensity * 0.4;
       p.tvy *= 0.6 + intensity * 0.4;
@@ -408,7 +454,9 @@ export class TeamAI {
     if (ai.tackleT <= 0) {
       ai.tackleT = 0.12 + m.rng() * 0.1;
       if (toBall < 1.45 && p.tackleCD <= 0 && p.canAct() && c.state !== ST.HOLD && p.stunT <= 0) {
-        let chance = this.prof.tackle * (0.3 + p.def / 350);
+        // Good defenders wait for a loose touch: tight control is hard to win.
+        const exposure = clamp((dist(c.x, c.y, b.x, b.y) - 0.45) / 0.55, 0.2, 1);
+        let chance = this.prof.tackle * (0.18 + p.def / 500) * exposure;
         if (c.skillT > 0) chance *= 0.3;
         if (m.rng() < chance) m.tackle(p, false);
       }
@@ -434,7 +482,7 @@ export class TeamAI {
     const ul = Math.sqrt(ux * ux + uy * uy) || 1;
     let bx = b.x - o.x, by = b.y - o.y;
     const bl = Math.sqrt(bx * bx + by * by) || 1;
-    const tight = 1.1 + (1 - this.prof.mark) * 3 + Math.max(0, t.lx(o.x) - 18) * 0.12;
+    const tight = 1.4 + (1 - this.prof.mark) * 3 + Math.max(0, t.lx(o.x) - 16) * 0.15;
     const tx = o.x + o.vx * 0.3 + (ux / ul) * tight + (bx / bl) * 0.7;
     const ty = o.y + o.vy * 0.3 + (uy / ul) * tight + (by / bl) * 0.7;
     this.moveTo(p, tx, ty, dist(p.x, p.y, tx, ty) > 3 || o.speed > p.jog);
@@ -495,6 +543,23 @@ export class TeamAI {
       if (m.ball.owner !== p) return;
     }
     if (ai.plan === 'dribble') {
+      // Take on a defender squaring up in front: a skill move away from him.
+      if (p.skillCD <= 0 && p.canAct() && p.dri > 65) {
+        const n = m.nearestOpp(p, 3.2);
+        if (n && !n.p.isGK) {
+          const dx = n.p.x - p.x, dy = n.p.y - p.y;
+          if ((dx * p.fx + dy * p.fy) / n.d > 0.55 && m.rng() < dt * (0.6 + (p.dri - 70) * 0.06) * this.prof.tempo) {
+            const ang = (p.fx * dy - p.fy * dx > 0 ? -1 : 1) * (0.85 + m.rng() * 0.45);
+            const c = Math.cos(ang), s = Math.sin(ang);
+            const ux = p.fx * c - p.fy * s, uy = p.fx * s + p.fy * c;
+            m.skillMove(p, ux, uy);
+            ai.dx = clamp(p.x + ux * 5, 1.5, L - 1.5);
+            ai.dy = clamp(p.y + uy * 5, 1.5, W - 1.5);
+            ai.sprint = true;
+            ai.decideT = Math.max(ai.decideT, 0.4);
+          }
+        }
+      }
       const d = this.moveTo(p, ai.dx, ai.dy, ai.sprint);
       if (d < 1.0) ai.decideT = Math.min(ai.decideT, 0.03);
     } else if (ai.plan === 'shield') {
@@ -535,41 +600,63 @@ export class TeamAI {
     return clamp(pr * pr * (0.5 - (p.dri - 75) * 0.01), 0.02, 0.65);
   }
 
-  blockFactor(p) {
-    // Share of the goal mouth covered by opponents between shooter and goal.
-    const t = this.t, sp = this.sp;
-    const gx = t.oppGoalX;
-    let block = 0;
+  // Share of the goal mouth hidden behind opponents' bodies, seen from the
+  // ball (local frame: goal at lx = L). With `half` = -1 / 1 only that half
+  // of the goal is considered (for picking the open corner).
+  blockFactor(p, half = 0) {
+    const t = this.t;
+    const bx = t.lx(p.x), by = t.ly(p.y);
+    if (bx > L - 0.5) return 1;
+    let lo = Math.atan2(CY - GOAL_HW - by, L - bx), hi = Math.atan2(CY + GOAL_HW - by, L - bx);
+    const mid = Math.atan2(CY - by, L - bx);
+    if (half < 0) hi = mid;
+    else if (half > 0) lo = mid;
+    const iv = this.iv || (this.iv = []);
+    iv.length = 0;
     for (const o of t.opp.players) {
-      if (o.isGK) continue;
-      segPoint(p.x, p.y, gx, CY, o.x, o.y, sp);
-      if (sp.t > 0.02 && sp.t < 0.98 && sp.d < 2.2) block += (1 - sp.d / 2.2) * 0.6;
+      if (o.isGK || o.state === ST.DOWN) continue;
+      const dx = t.lx(o.x) - bx, dy = t.ly(o.y) - by;
+      if (dx < 0.3) continue;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      const a = Math.atan2(dy, dx), w = Math.atan2(0.62, d);
+      const s = Math.max(lo, a - w), e = Math.min(hi, a + w);
+      if (e > s) iv.push([s, e]);
     }
-    return clamp(block, 0, 1);
+    if (!iv.length) return 0;
+    iv.sort((u, v) => u[0] - v[0]);
+    let covered = 0, cs = iv[0][0], ce = iv[0][1];
+    for (let i = 1; i < iv.length; i++) {
+      if (iv[i][0] > ce) {
+        covered += ce - cs;
+        cs = iv[i][0];
+        ce = iv[i][1];
+      } else ce = Math.max(ce, iv[i][1]);
+    }
+    covered += ce - cs;
+    return clamp(covered / (hi - lo), 0, 1);
   }
 
   decide(p, pr) {
     const m = this.m, t = this.t, prof = this.prof;
     const lx = t.lx(p.x), ly = t.ly(p.y);
     let best = null;
-    const all = globalThis.__aiDebug ? [] : null;
     const consider = (o) => {
       if (!o) return;
       o.u *= 1 + m.rng.gauss() * prof.noise * 0.35;
-      if (all) all.push(o);
       if (!best || o.u > best.u) best = o;
     };
     const here = threat(lx, ly);
 
     const dGoal = dist(lx, ly, L, CY);
-    if (dGoal < 34 && lx > 62) {
-      let xg = xgAt(lx, ly) * (0.55 + p.sho / 170);
-      xg *= 1 - this.blockFactor(p) * 0.7;
-      xg *= 1 - pr * 0.25;
-      const range = dGoal > 16 && dGoal < 28 && p.sho > 78 ? (p.sho - 78) * 0.0012 : 0;
-      consider({ kind: 'shoot', u: xg * prof.shootBias * 1.35 + 0.008 + range });
+    if (dGoal < 36 && lx > 60) {
+      // xgAt matches the engine's finishing, so this is an honest chance of a
+      // goal; the small premium stands for rebounds and corners.
+      // Pressure and a full sprint cost accuracy (see Match.shoot).
+      const run = Math.min(1, p.speed / p.vmax);
+      const open = (1 - this.blockFactor(p)) * (1 - pr * 0.55) * (1 - run * run * 0.25);
+      consider({ kind: 'shoot', u: xgAt(lx, ly) * (0.2 + p.sho / 115) * prof.shootBias * open * 1.05 + 0.004 });
     }
-    const wide = lx > 76 && Math.abs(ly - CY) > 12;
+    const wide = lx > 70 && Math.abs(ly - CY) > 11;
     for (const q of t.players) {
       if (q === p || q.state === ST.DOWN) continue;
       if (q.isGK && (lx > 40 || pr < 0.5)) continue;
@@ -581,7 +668,6 @@ export class TeamAI {
     for (let k = 0; k < DIRS.length; k++) consider(this.evalDribble(p, k, contact));
     if (lx < 30 && pr > 0.5) consider({ kind: 'clear', u: 0.012 });
     consider({ kind: 'shield', u: here * (1 - contact * 1.3) * 0.5 - contact * this.lossCost(lx, ly) * 0.5 });
-    if (all) globalThis.__aiDebug(p, all, best, lx, ly, pr);
     this.execute(p, best);
   }
 
@@ -618,7 +704,9 @@ export class TeamAI {
     if (tx < 1 || tx > L - 1 || ty < 1 || ty > W - 1) return null;
     const va = through ? clamp(4 + d * 0.12, 5, 9) : clamp(8 + d * 0.2, 9, 15.5);
     const v0 = Math.min(31, groundSpeedFor(d, va));
-    const risk = this.passRisk(b.x, b.y, tx, ty, v0, q, d);
+    let risk = this.passRisk(b.x, b.y, tx, ty, v0, q, d);
+    // Slow balls into space give the whole defence time to react (measured).
+    if (through) risk = 1 - Math.pow(1 - risk, 1.8);
     const val = this.valueAt(tx, ty) * (q.isGK ? 0.5 : 1);
     const blx = t.lx(b.x);
     const loss = this.lossCost((blx + tlx) * 0.5, (t.ly(b.y) + tly) * 0.5) * (blx > 60 ? 0.6 : 1);
@@ -629,14 +717,31 @@ export class TeamAI {
 
   passRisk(ax, ay, tx, ty, v0, q, d) {
     const sp = this.sp;
+    // Where does the receiver meet the ball? Opponents behind that point have
+    // to beat him there instead of cutting the lane.
+    let sMeet = d;
+    for (let k = 1; k <= 8; k++) {
+      const s = (d * k) / 8;
+      const tb = groundTime(v0, s);
+      if (!isFinite(tb)) break;
+      if (q.timeTo(ax + ((tx - ax) * s) / d, ay + ((ty - ay) * s) / d, 0.05, 0.9) <= tb) {
+        sMeet = s;
+        break;
+      }
+    }
     let risk = 0;
     for (const o of this.t.opp.players) {
       if (o.state === ST.DOWN) continue;
       segPoint(ax, ay, tx, ty, o.x, o.y, sp);
-      const s = sp.t * d;
+      let s = sp.t * d, px = sp.x, py = sp.y;
+      if (s > sMeet) {
+        s = sMeet;
+        px = ax + ((tx - ax) * s) / d;
+        py = ay + ((ty - ay) * s) / d;
+      }
       const tb = groundTime(v0, s);
       if (!isFinite(tb)) continue;
-      const to = o.timeTo(sp.x, sp.y, 0.22 + (o.stunT > 0 ? o.stunT : 0), o.isGK ? 1.3 : 0.9);
+      const to = o.timeTo(px, py, 0.22 + (o.stunT > 0 ? o.stunT : 0), o.isGK ? 1.3 : 0.9);
       const r = sigmoid((tb - to) * 6);
       if (r > risk) risk = r;
     }
@@ -649,7 +754,7 @@ export class TeamAI {
   evalCross(p, q) {
     const t = this.t;
     const qlx = t.lx(q.x), qly = t.ly(q.y);
-    if (qlx < L - 18 || Math.abs(qly - CY) > 12) return null;
+    if (qlx < L - 20 || Math.abs(qly - CY) > 14) return null;
     const tx = q.x + q.vx * 0.8, ty = q.y + q.vy * 0.8;
     let risk = 0;
     for (const o of t.opp.players) {
@@ -657,7 +762,7 @@ export class TeamAI {
       const r = o.isGK ? sigmoid((4.5 - d) * 1.2) : sigmoid((2.2 - d) * 1.6) * (0.4 + o.def / 200);
       risk = Math.max(risk, r);
     }
-    const u = threat(t.lx(tx), t.ly(ty)) * 0.28 * (1 - risk) * (0.6 + q.phy / 250) - risk * 0.01;
+    const u = threat(t.lx(tx), t.ly(ty)) * 0.5 * (1 - risk) * (0.6 + q.phy / 250) - risk * 0.01;
     return { kind: 'cross', q, tx, ty, u, risk };
   }
 
@@ -669,17 +774,19 @@ export class TeamAI {
     const len = 4;
     const tx = p.x + Math.cos(a) * len, ty = p.y + Math.sin(a) * len;
     if (tx < 1.5 || tx > L - 1.5 || ty < 1.5 || ty > W - 1.5) return null;
+    // A defender who gets to the path first only forces a duel, and the
+    // carrier can still change course (calibrated against actual losses).
+    const oppTackle = this.m.ai[t.opp.index].prof.tackle;
     let path = 0;
     for (const o of t.opp.players) {
       if (o.state === ST.DOWN) continue;
       segPoint(p.x, p.y, tx, ty, o.x, o.y, sp);
       const tp = 0.1 + (sp.t * len) / (p.vmax * 0.85);
       const to = o.timeTo(sp.x, sp.y, 0.1 + (o.stunT > 0 ? o.stunT : 0), 1.1);
-      const r = sigmoid((tp - to) * 5);
+      const r = sigmoid((tp - to) * 5) * clamp(0.3 + (o.def - p.dri) * 0.012, 0.08, 0.6) * oppTackle;
       if (r > path) path = r;
     }
-    path *= 1.2 - p.dri / 200;
-    const risk = 1 - (1 - path) * (1 - contact);
+    const risk = 1 - (1 - Math.min(0.95, path * this.prof.caution)) * (1 - contact * 0.5);
     const tlx = t.lx(tx);
     if (tlx > L - 2) return null;
     const val = this.valueAt(tx, ty);
@@ -691,7 +798,6 @@ export class TeamAI {
 
   execute(p, o) {
     const m = this.m, t = this.t, ai = p.ai;
-    if (globalThis.__aiStats) globalThis.__aiStats(p, o);
     ai.decideT = this.reactTime() * (o.kind === 'dribble' ? 1.3 : 1) * (t.lx(p.x) > 70 ? 0.75 : 1);
     ai.plan = null;
     switch (o.kind) {
@@ -736,9 +842,19 @@ export class TeamAI {
   aiShoot(p, kind) {
     const m = this.m, t = this.t;
     const gk = t.opp.gk;
-    const side = gk.y > CY ? -1 : 1;
-    const far = m.rng() < 0.72;
-    const ty = CY + (far ? side : -side) * (GOAL_HW - 0.55 - m.rng() * 0.9);
+    // Local-frame halves map to world sides through ly (mirrored for dir < 0).
+    const ws = (h) => (t.wy(CY + h) > CY ? 1 : -1);
+    let side = gk.y > CY ? -1 : 1; // far side from the keeper
+    let near = m.rng() > 0.72;
+    if (kind !== 'penalty') {
+      // Prefer the corner that is not hidden behind a defender.
+      const bl = this.blockFactor(p, -1), br = this.blockFactor(p, 1);
+      if (Math.abs(bl - br) > 0.25) {
+        side = ws(bl < br ? -1 : 1);
+        near = false;
+      }
+    }
+    const ty = CY + (near ? -side : side) * (GOAL_HW - 0.55 - m.rng() * 0.9);
     const lowish = m.rng() < 0.6;
     const tz = lowish ? 0.2 + m.rng() * 0.6 : 0.9 + m.rng() * 1.1;
     const gkOut = Math.abs(gk.x - t.oppGoalX) > 6;

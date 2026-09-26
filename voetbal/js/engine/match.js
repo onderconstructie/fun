@@ -323,7 +323,13 @@ export class Match {
     this.predVersion = b.version;
     const pred = this.pred;
     if (b.owner) {
+      // Earliest time each player can get in front of the carrier on his
+      // current run (goal side, for opponents): a defender chasing from
+      // behind never does, one ahead of the run steps in.
       const c = b.owner;
+      const og = c.team.opp.ownGoalX;
+      const gl = Math.max(1, dist(c.x, c.y, og, CY));
+      const gx = (og - c.x) / gl, gy = (CY - c.y) / gl;
       for (const p of this.players) {
         if (p === c) {
           p.icT = 0;
@@ -331,10 +337,16 @@ export class Match {
           p.icY = c.y;
           continue;
         }
-        const d = dist(p.x, p.y, c.x + c.vx * 0.3, c.y + c.vy * 0.3);
-        p.icT = d / p.vmax + 0.15;
-        p.icX = c.x + c.vx * Math.min(1, p.icT * 0.5);
-        p.icY = c.y + c.vy * Math.min(1, p.icT * 0.5);
+        const ahead = p.team === c.team ? 0 : 1.1;
+        let t = 0, x = c.x, y = c.y;
+        for (; t < 3; t += 0.15) {
+          x = clamp(c.x + c.vx * t, 0.5, L - 0.5);
+          y = clamp(c.y + c.vy * t, 0.5, W - 0.5);
+          if (p.timeTo(x + gx * ahead, y + gy * ahead, 0.1, 0.6) <= t) break;
+        }
+        p.icT = t < 3 ? t : 3 + dist(p.x, p.y, x, y) / p.vmax;
+        p.icX = x;
+        p.icY = y;
       }
       return;
     }
@@ -585,7 +597,7 @@ export class Match {
     const through = a.type === 'through';
     // Smart pass: aimed cone first; without an explicit aim, fall back to the
     // best option anywhere instead of kicking into empty space.
-    const q = this.pickReceiver(p, dx, dy, through) || (!pushed ? this.pickReceiver(p, dx, dy, through, -1) : null);
+    const q = this.pickReceiver(p, dx, dy, through) || this.pickReceiver(p, dx, dy, through, 0) || (!pushed ? this.pickReceiver(p, dx, dy, through, -1) : null);
     const lob = !!a.lob;
     if (!q) {
       // Pass into space.
@@ -611,9 +623,11 @@ export class Match {
     }
   }
 
-  // Human pass target: the teammate best matching the aim direction.
+  // Human pass target: among the teammates roughly in the aim direction, the
+  // one best matching it, weighed against how likely the ball gets there
+  // (same interception model the AI uses), so a casual press finds the open man.
   pickReceiver(p, dx, dy, through, minCos = 0.45) {
-    const t = p.team;
+    const t = p.team, b = this.ball, ai = this.ai[t.index];
     let best = null, bs = -1e9;
     for (const q of t.players) {
       if (q === p) continue;
@@ -622,9 +636,12 @@ export class Match {
       if (d < 2.5 || d > 60) continue;
       const cos = (vx * dx + vy * dy) / d;
       if (cos < minCos) continue;
-      let s = cos * 4.2 - d * 0.04;
+      let s = cos * 3.2 - d * 0.035;
       if (q.isGK) s -= 2.5;
-      s -= this.laneBlock(p.x, p.y, q.x, q.y, t.opp) * 1.1;
+      const pt = through ? this.leadPoint(p, q) : q;
+      const dd = Math.max(1, dist(b.x, b.y, pt.x, pt.y));
+      const va = through ? clamp(4 + dd * 0.12, 5, 9) : clamp(8 + dd * 0.2, 9, 15.5);
+      s -= ai.passRisk(b.x, b.y, pt.x, pt.y, Math.min(31, groundSpeedFor(dd, va)), q, dd) * 3.5;
       if (through) {
         const fwd = (q.vx * t.dir) / Math.max(1, q.vmax);
         s += fwd * 1.2 + (t.lx(q.x) - t.lx(p.x)) * 0.03;
@@ -872,7 +889,8 @@ export class Match {
     const toGoalX = (gx - p.x) / d, toGoalY = (ty - p.y) / d;
     const turn = Math.max(0, 1 - (p.fx * toGoalX + p.fy * toGoalY));
     const over = Math.max(0, power - 0.85) / 0.15;
-    let sig = (0.22 + (100 - p.sho) * 0.013) * (0.5 + d / 24) * (1 + pressure * 0.7) * (1 + turn * 0.45) * (0.85 + over * 0.5) * prof.shotErr;
+    const run = Math.min(1, p.speed / p.vmax);
+    let sig = (0.22 + (100 - p.sho) * 0.013) * (0.3 + Math.pow(d / 15, 2.4)) * (1 + pressure * 0.9) * (1 + turn * 0.45) * (0.85 + over * 0.5) * (1 + run * run * 0.55) * prof.shotErr;
     if (opts.header) sig *= 1.5;
     let speed = 12 + power * (12 + p.sho * 0.08);
     if (opts.header) speed = 11 + p.phy * 0.04 + b.speed * 0.15;
@@ -1012,18 +1030,23 @@ export class Match {
     b.rot += len(b.vx, b.vy) * dt / BALL_R;
 
     if (this.phase !== 'play') return;
-    // Body contest: defenders near the ball can nick it.
+    // Body contest: defenders near the ball can nick it, more easily when
+    // the carrier's touch is heavy (ball far from his feet).
+    const exposure = clamp((d - 0.45) / 0.55, 0.25, 1);
+    const mvx = sp > 0.5 ? p.vx / sp : p.fx, mvy = sp > 0.5 ? p.vy / sp : p.fy;
     for (const o of p.team.opp.players) {
       if (o.touchCD > 0 || !o.canAct() || o.state === ST.HOLD) continue;
       const db = dist(o.x, o.y, b.x, b.y);
-      if (db > 0.85) continue;
+      if (db > 0.9) continue;
       const aiProf = this.ai[o.team.index].prof;
-      let rate = 0.9 * (0.6 + (o.def - p.dri) * 0.02) * aiProf.tackle;
-      if (o.human) rate *= 1.1;
-      if (p.skillT > 0) rate *= 0.2;
-      if (p.state === ST.HOLD) rate = 0;
-      if (this.rng() < clamp(rate, 0.1, 2.5) * dt) {
-        this.steal(o, p, false);
+      const skill = 0.6 + (o.def - p.dri) * 0.02;
+      // Dribbling straight into a defender who stands in the ball's path.
+      const inFront = (o.x - b.x) * mvx + (o.y - b.y) * mvy > 0 && db < 0.7;
+      let rate = inFront ? 5 * skill * (0.5 + 0.5 * (o.human ? 1 : aiProf.tackle)) * (0.4 + 0.6 * Math.min(1, sp / 4)) : 1.2 * skill * aiProf.tackle * exposure;
+      if (o.human && !inFront) rate *= 1.1;
+      if (p.skillT > 0) rate *= 0.15;
+      if (this.rng() < clamp(rate, 0.1, 6) * dt) {
+        this.steal(o, p, inFront && this.rng() < 0.4);
         return;
       }
     }
@@ -1071,6 +1094,11 @@ export class Match {
       let reach = hands ? (p.state === ST.DIVE ? 1.05 : 1.25) : kick && kick.target === p ? 1.05 : 0.9;
       // A freshly struck ball can only be blocked, not controlled, before a player reacts.
       if (kick && kick.target !== p && (this.frame - kick.frame) * STEP < 0.2) reach = Math.min(reach, 0.45);
+      if (kick && kick.shot && !hands && sp > 12) {
+        // A shot flies past the shooter's teammates; opponents block it with the body.
+        if (kick.team === p.team.index) continue;
+        reach = Math.min(reach, 0.65);
+      }
       const zmax = hands ? 2.75 : 1.45;
       if (d < reach && b.z <= zmax) {
         let s = d;
@@ -1377,8 +1405,9 @@ export class Match {
     const g = gk.gk;
     const penalty = b.kick && b.kick.kind === 'penalty';
     let react = (0.12 + (100 - g.ref) * 0.0055) * prof.gkReact;
-    const diveSpeed = 4.6 + g.div * 0.038;
-    const maxReach = 2.1 + g.div * 0.009;
+    // Lateral speed of the dive and the furthest the keeper can stretch.
+    const diveSpeed = 4.6 + g.div * 0.02;
+    const maxReach = 3.3 + g.div * 0.006;
     let guess = 0;
     if (penalty) {
       // Keeper commits to a side at the kick: the user picks with the joystick, the AI guesses.
@@ -1394,24 +1423,24 @@ export class Match {
     const dy = yG - gk.y;
     const hz = zG > 1.9 ? (zG - 1.9) * 1.3 : zG < 0.35 && Math.abs(dy) > 1.3 ? 0.4 : 0;
     const need = Math.sqrt(dy * dy + hz * hz);
-    const avail = tG - react;
-    const reach = Math.min(maxReach, 0.95 + Math.max(0, avail) * diveSpeed);
-    const margin = reach - need;
+    // Time the keeper needs to get a hand there (the first 0.6 m is just
+    // reach) versus the time the ball takes: slack decides the save.
+    const slack = tG - react - Math.max(0, need - 0.6) / diveSpeed;
     const sp = b.speed;
     const quality = 0.9 + (gk.ovr - 80) * 0.007;
-    let pSave = sigmoid(margin * 3.4) * (1 - clamp((sp - 20) / 45, 0, 0.3) * (1 - clamp(margin / 1.8, 0, 1))) * quality;
-    if (avail < 0.03) pSave *= 0.35;
+    let pSave = need > maxReach ? 0.02 : sigmoid(slack * 5.5 - 0.9) * quality;
     // Chips over an advanced keeper.
     if (zG > 2.6) pSave *= 0.15;
     const ballSide = Math.abs(yLine - CY) > 1.0 ? Math.sign(yLine - CY) : 0;
-    if (penalty) pSave = guess === ballSide ? pSave * 0.62 : 0.03;
+    if (penalty) pSave = guess === ballSide ? sigmoid(slack * 4.5 - 0.2) * quality : 0.03;
     pSave = clamp(pSave, 0.02, 0.97);
     const save = onTarget ? this.rng() < pSave : false;
-    const catchIt = save && sp < 16 + g.han * 0.07 && need < reach * 0.75 && this.rng() < 0.4 + g.han * 0.006;
+    const catchIt = save && sp < 16 + g.han * 0.07 && slack > 0.25 && this.rng() < 0.4 + g.han * 0.006;
     // Dive target: exact when saving, short when beaten.
     let ty = yG;
     if (!save) {
-      const shortBy = Math.max(0.45, need - reach + 0.35);
+      const reachAtT = 0.6 + Math.max(0, tG - react) * diveSpeed;
+      const shortBy = Math.max(0.45, need - reachAtT + 0.35);
       ty = yG - Math.sign(dy || 1) * Math.min(Math.abs(dy), shortBy);
       if (!onTarget) ty = gk.y + (yG - gk.y) * 0.6;
       if (penalty && guess !== ballSide) ty = CY + guess * 2.4;
@@ -1437,6 +1466,8 @@ export class Match {
       big: need > 1.0,
       cancel: false,
     };
+    gk.state = ST.DIVE;
+    gk.stateT = 0;
     if (!save) gk.touchCD = tG + 0.35;
     gk.ai.mode = 'gk';
   }
@@ -1455,13 +1486,25 @@ export class Match {
     const t = gk.team; // t.dir points from the keeper's goal into the pitch
     const s = b.speed;
     const lateral = Math.sign(b.y - gk.y || this.rng() - 0.5);
-    b.vx = t.dir * (3 + this.rng() * 5) + this.rng.gauss() * 2;
-    b.vy = lateral * (4 + this.rng() * 6);
-    b.vz = 2 + this.rng() * 4;
-    if (this.rng() < 0.35) {
-      // Tipped around the post / over the bar.
-      b.vx = -t.dir * (2 + this.rng() * 3);
-      b.vz = 3 + this.rng() * 3;
+    const toLine = Math.abs(t.ownGoalX - b.x);
+    b.spin = 0;
+    if (toLine < 3 && this.rng() < 0.4) {
+      // Tipped over the bar or round the post: aimed to clear the frame.
+      const tl = clamp(toLine / (1.5 + this.rng() * 1.5), 0.12, 0.6);
+      b.vx = -t.dir * Math.max(1.5, toLine / tl);
+      if (b.z > 1.5) {
+        b.vy = lateral * this.rng() * 2;
+        b.vz = (GOAL_H + 0.7 - b.z + 4.9 * tl * tl) / tl;
+      } else {
+        const side = Math.sign(b.y - CY || lateral);
+        b.vy = (CY + side * (GOAL_HW + 0.9) - b.y) / tl;
+        b.vz = 0.5 + this.rng() * 1.5;
+      }
+    } else {
+      // Pushed away from goal.
+      b.vx = t.dir * Math.max(2, 3 + this.rng() * 5 + this.rng.gauss() * 1.5);
+      b.vy = lateral * (4 + this.rng() * 6);
+      b.vz = 1.5 + this.rng() * 3.5;
     }
     b.version++;
     this.touch(gk);
@@ -1526,7 +1569,7 @@ export class Match {
     // Missed.
     p.stunT = 0.5;
     this.emit('tackle', { player: p, won: false });
-    const foulP = (behind ? 0.3 : 0.06) * (d < 1.2 ? 1 : 0.4);
+    const foulP = (behind ? 0.35 : 0.1) * (d < 1.2 ? 1 : 0.4);
     if (this.rng() < foulP) this.foul(p, c, behind && this.rng() < 0.25);
   }
 
@@ -1669,7 +1712,7 @@ export class Match {
         p.vx += ax;
         p.vy += ay;
         // Speed cap (ball carriers are slightly slower).
-        const cap = (this.ball.owner === p ? p.vmax * (0.9 + p.dri * 0.0006) : p.vmax) * (p.state === ST.KICK ? 0.8 : 1);
+        const cap = (this.ball.owner === p ? p.vmax * (0.82 + p.dri * 0.001) : p.vmax) * (p.state === ST.KICK ? 0.8 : 1);
         const s = p.speed;
         if (s > cap && p.state !== ST.TACKLE) {
           p.vx *= cap / s;
