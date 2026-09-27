@@ -240,7 +240,7 @@ function handleEvents(race) {
   for (const e of race.events) {
     switch (e.type) {
       case 'count':
-        s.count(e.n);
+        s.count();
         hud.countdown(String(e.n));
         if (e.n === 3) app.controls.calibrate();
         break;
@@ -474,10 +474,10 @@ function boot() {
     if (t.hasAttribute('data-back')) app.back();
     else app.go(t.getAttribute('data-go'));
   });
-  // Audio may only start after a tap (iOS).
+  // Audio may only start inside a tap or key press, and phones count the
+  // moment the finger lifts, so every one of these gets a chance.
   const unlock = () => app.sound.unlock();
-  window.addEventListener('pointerdown', unlock, { passive: true });
-  window.addEventListener('keydown', unlock);
+  for (const type of ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown']) window.addEventListener(type, unlock, { passive: true, capture: true });
 
   $('#btn-pause').addEventListener('click', () => app.pause());
   $('#btn-horn').addEventListener('pointerdown', (e) => {
