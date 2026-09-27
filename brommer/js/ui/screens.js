@@ -261,7 +261,7 @@ export function initScreens(app) {
         <div class="help-card"><h3>Levels</h3><p>Top 3 speelt het volgende level vrij. Elke wereld eindigt met een <b>baas</b>. Na level ${MAIN_LEVELS} gaat het door: nog moeilijker dan dat!</p></div>
         <div class="help-card"><h3>Toetsenbord</h3><p>Pijltjes of A/D sturen · spatie toetert · Esc pauzeert. Een gamepad werkt ook.</p></div>
       </div>
-      <p class="legal">Alle namen, brommers en plaatsen in Brommer Bende zijn verzonnen. Gratis hobbyproject, geen reclame. Lettertype Barlow Condensed (SIL Open Font License).</p></div>`;
+      <p class="legal">Alle namen, brommers en plaatsen in Brommer &amp; the Finish zijn verzonnen. Gratis hobbyproject, geen reclame. Lettertype Barlow Condensed (SIL Open Font License).</p></div>`;
   }
 
   const handlers = {

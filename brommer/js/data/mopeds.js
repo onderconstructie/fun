@@ -10,7 +10,7 @@ export const MOPEDS = [
   { id: 'wervelwind', name: 'Wervelwind', style: 'scooter', price: 6500, top: 56, accel: 23, handling: 1.16, grab: 1.1, color: '#2ee6c8', desc: 'Draait door elke bocht alsof het niks is.' },
   { id: 'donder', name: 'Donder', style: 'klassiek', price: 9500, top: 61, accel: 25, handling: 1.05, grab: 1.28, color: '#8b5cf6', desc: 'Zwaar en sterk. Wie je raakt, is zijn snelheid kwijt.' },
   { id: 'raket', name: 'Raket', style: 'sport', price: 14000, top: 66, accel: 29, handling: 1.1, grab: 1.15, color: '#ff3b6b', desc: 'Is het een brommer? Is het een raket? Allebei!' },
-  { id: 'goud', name: 'Gouden Brommer', style: 'sport', price: 22000, top: 72, accel: 32, handling: 1.2, grab: 1.35, color: '#f5c542', desc: 'De snelste brommer van het land. Alleen voor kampioenen.' },
+  { id: 'goud', name: 'Kampioen', style: 'sport', price: 22000, top: 72, accel: 32, handling: 1.2, grab: 1.35, color: '#f5c542', desc: 'Glimmend goud en de snelste van allemaal. Alleen voor echte kampioenen.' },
 ];
 
 export const MOPED_BY_ID = Object.fromEntries(MOPEDS.map((m) => [m.id, m]));

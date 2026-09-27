@@ -1,5 +1,5 @@
 // Offline support: network-first (always fresh when online), cache fallback.
-const CACHE = 'brommer-bende-v1';
+const CACHE = 'brommer-finish-v1';
 const ASSETS = [
   './',
   'css/style.css',
@@ -48,7 +48,7 @@ self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('brommer-bende-') && k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('brommer-finish-') && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });

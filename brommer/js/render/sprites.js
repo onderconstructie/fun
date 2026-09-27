@@ -489,9 +489,10 @@ function drawBillboard(g, W, H) {
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.font = `italic 800 ${Math.round(H * 0.2)}px "Barlow Condensed", "Arial Narrow", sans-serif`;
-  g.fillText('BROMMER', W * 0.5, H * 0.24);
+  g.fillText('BROMMER', W * 0.5, H * 0.23);
   g.fillStyle = '#ffe14d';
-  g.fillText('BENDE', W * 0.5, H * 0.44);
+  g.font = `italic 800 ${Math.round(H * 0.14)}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+  g.fillText('& THE FINISH', W * 0.5, H * 0.44);
 }
 
 function drawCone(g, W, H) {

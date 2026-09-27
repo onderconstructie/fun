@@ -1,4 +1,4 @@
-// Brommer Bende – app controller: boot, navigation, game loop and race glue.
+// Brommer & the Finish – app controller: boot, navigation, game loop and race glue.
 
 import { Race } from './engine/race.js';
 import { STEP, KMH } from './config.js';

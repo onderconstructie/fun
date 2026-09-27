@@ -1,7 +1,7 @@
 {
-  "name": "Brommer Bende – race met brommers",
-  "short_name": "Brommer Bende",
-  "description": "Race met brommers. Bots tegen de anderen en pak hun snelheid. Eindig in de top 3 voor muntjes en koop nieuwe brommers.",
+  "name": "Brommer & the Finish",
+  "short_name": "Brommer",
+  "description": "Race met brommers naar de finish. Bots tegen de anderen en pak hun snelheid. Eindig in de top 3 voor muntjes en koop nieuwe brommers.",
   "lang": "nl",
   "start_url": "./",
   "scope": "./",

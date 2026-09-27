@@ -1,4 +1,4 @@
-// Brommer Bende – shared constants for engine and renderer.
+// Brommer & the Finish – shared constants for engine and renderer.
 // World units: the road is 2 * ROAD wide, the track is a list of SEG-long
 // segments. Speeds are world units per second; KMH converts to km/u for display.
 

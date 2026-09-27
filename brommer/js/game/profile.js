@@ -3,7 +3,7 @@
 
 import { MOPED_BY_ID } from '../data/mopeds.js';
 
-const KEY = 'brommer-bende-v1';
+const KEY = 'brommer-finish-v1';
 
 export const DEFAULT_SETTINGS = {
   sound: true,
