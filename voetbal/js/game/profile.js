@@ -2,11 +2,12 @@
 
 import { PLAYERS, PLAYER_BY_ID } from '../data/players.js';
 import { FORMATIONS, positionPenalty } from '../data/formations.js';
-import { customTeam } from '../data/teams.js';
+import { customTeam, TEAM_ORDER } from '../data/teams.js';
 import { KITS } from '../data/nations.js';
 import { shuffle } from '../util.js';
 
 const KEY = 'gouden-elf-v1';
+const TEAM_IDS = new Set(['ELF', ...TEAM_ORDER]);
 
 export const DEFAULT_SETTINGS = {
   sound: true,
@@ -36,7 +37,7 @@ function defaults() {
     lastDaily: '',
     freePacks: ['welkom'],
     tutorialSeen: false,
-    lastPick: ['ELF', 'ESP'],
+    lastPick: ['ELF', 'ALD'],
     cup: null,
   };
 }
@@ -59,6 +60,9 @@ export function loadProfile() {
   if (!p.squad || !FORMATIONS[p.squad.formation]) p.squad = { formation: '4-3-3', slots: [] };
   p.squad.slots = (p.squad.slots || []).filter((id) => PLAYER_BY_ID[id]);
   if (Object.keys(p.owned).length < 11 || p.squad.slots.length !== 11) starterSquad(p);
+  // Team ids can change between versions too.
+  if (!Array.isArray(p.lastPick) || !p.lastPick.every((id) => TEAM_IDS.has(id))) p.lastPick = d.lastPick;
+  if (p.cup && !(Array.isArray(p.cup.teams) && p.cup.teams.every((id) => TEAM_IDS.has(id)))) p.cup = null;
   return p;
 }
 

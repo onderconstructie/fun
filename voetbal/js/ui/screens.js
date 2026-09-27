@@ -81,7 +81,7 @@ export function initScreens(app) {
     setup.diff = s.difficulty;
     setup.dur = mode === 'attack' ? (s.attackRounds || 6) : s.duration;
     const list = teamList();
-    const [a, b] = app.profile.lastPick || ['ELF', 'ESP'];
+    const [a, b] = app.profile.lastPick || ['ELF', 'ALD'];
     setup.pick[0] = Math.max(0, list.findIndex((t) => t.id === a));
     setup.pick[1] = Math.max(0, list.findIndex((t) => t.id === b));
     if (setup.pick[1] === setup.pick[0]) setup.pick[1] = (setup.pick[0] + 1) % list.length;
@@ -285,7 +285,7 @@ export function initScreens(app) {
           <li>Pijltjes/WASD bewegen · <b>J</b> schieten (vasthouden) · <b>K</b> pass/wissel · <b>L</b> door/druk · <b>Shift</b> sprint · <b>U</b> + actie = hoog · <b>Spatie</b> dribbel.</li>
           <li>Gamepad: stick, A pass, B schiet, Y door, RB/RT sprint, LB = hoog.</li></ul></div>
       </div>
-      <p class="legal">Spelersnamen zijn echt; posities en nationaliteiten volgens de situatie medio 2026. Alle ratings zijn eigen inschattingen van dit spel, niet afkomstig uit andere games. Er worden bewust geen clubs, logo's of foto's gebruikt. Gouden Elf is een gratis, niet-commercieel fanproject en is niet verbonden aan EA SPORTS FC, FIFA, clubs of spelersverenigingen. Lettertype Barlow Condensed (SIL Open Font License).</p>
+      <p class="legal">Alle spelers, landen, ploegen, vlaggen en tenues in Gouden Elf zijn verzonnen voor dit spel. Elke gelijkenis met bestaande personen of teams berust op toeval. Gouden Elf is een gratis, niet-commercieel hobbyproject. Lettertype Barlow Condensed (SIL Open Font License).</p>
       </div>`;
   }
 
