@@ -1,6 +1,6 @@
 // Steering: hold the left or right half of the screen, arrow keys / A-D,
 // a gamepad stick, or (optional) tilt the phone like a steering wheel.
-// The moped accelerates by itself, so steering is all a rider needs.
+// The moped gives gas by itself; hold REM (or arrow down / S) to slow down.
 
 const TILT_FULL = Math.sin((24 * Math.PI) / 180); // tilt for full lock
 
@@ -17,6 +17,10 @@ export class Controls {
     this.padPrev = [];
     this.zoneL = root.querySelector('#zone-l');
     this.zoneR = root.querySelector('#zone-r');
+    this.brakePtr = new Set();
+    this.brakeOn = false;
+    this.brakeBtn = opts.brakeBtn || null;
+    if (this.brakeBtn) this.bindBrake(this.brakeBtn);
     root.addEventListener('pointerdown', (e) => this.onDown(e), { passive: false });
     root.addEventListener('pointermove', (e) => this.onMove(e), { passive: false });
     root.addEventListener('pointerup', (e) => this.onUp(e));
@@ -37,7 +41,31 @@ export class Controls {
   releaseAll() {
     this.ptr.clear();
     this.keys.clear();
+    this.brakePtr.clear();
     this.paint();
+  }
+
+  // The REM button: braking lasts as long as a finger holds it.
+  bindBrake(b) {
+    b.addEventListener('pointerdown', (e) => {
+      if (!this.enabled) return;
+      e.preventDefault();
+      try {
+        b.setPointerCapture(e.pointerId);
+      } catch (err) {
+        /* ignore */
+      }
+      this.brakePtr.add(e.pointerId);
+      this.paint();
+      if (this.opts.haptic) this.opts.haptic(8);
+    });
+    const up = (e) => {
+      if (this.brakePtr.delete(e.pointerId)) this.paint();
+    };
+    b.addEventListener('pointerup', up);
+    b.addEventListener('pointercancel', up);
+    b.addEventListener('lostpointercapture', up);
+    b.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
   // ------------------------------------------------------------ touch
@@ -89,13 +117,20 @@ export class Controls {
     const k = this.keySteer();
     this.zoneL.classList.toggle('on', s < 0 || k < 0);
     this.zoneR.classList.toggle('on', s > 0 || k > 0);
+    this.paintBrake(this.brakePtr.size > 0 || this.keyBrake());
+  }
+
+  paintBrake(on) {
+    if (on === this.brakeOn) return;
+    this.brakeOn = on;
+    if (this.brakeBtn) this.brakeBtn.classList.toggle('on', on);
   }
 
   // ------------------------------------------------------------ keyboard / gamepad
   onKey(e, down) {
     if (!this.enabled) return;
     const k = e.key.toLowerCase();
-    if (['arrowleft', 'arrowright', 'a', 'd', ' ', 'h'].includes(k)) e.preventDefault();
+    if (['arrowleft', 'arrowright', 'arrowdown', 'a', 'd', 's', ' ', 'h'].includes(k)) e.preventDefault();
     if (e.repeat) return;
     if (down) this.keys.add(k);
     else this.keys.delete(k);
@@ -111,19 +146,26 @@ export class Controls {
     return x;
   }
 
-  padSteer() {
-    if (!navigator.getGamepads) return 0;
+  keyBrake() {
+    return this.keys.has('arrowdown') || this.keys.has('s');
+  }
+
+  // Stick or d-pad steers, A/B toots, left trigger, X or d-pad down brakes.
+  pad() {
+    const none = { steer: 0, brake: 0 };
+    if (!navigator.getGamepads) return none;
     const pads = navigator.getGamepads();
     const gp = pads && [...pads].find((p) => p && p.connected);
-    if (!gp) return 0;
+    if (!gp) return none;
     const btn = (i) => !!(gp.buttons[i] && gp.buttons[i].pressed);
     if (btn(9) && !this.padPrev[9] && this.opts.onPause) this.opts.onPause();
     if ((btn(0) || btn(1)) && !(this.padPrev[0] || this.padPrev[1]) && this.opts.onHorn) this.opts.onHorn();
     this.padPrev = gp.buttons.map((b) => b.pressed);
     const ax = gp.axes[0] || 0;
-    if (btn(14)) return -1;
-    if (btn(15)) return 1;
-    return Math.abs(ax) > 0.15 ? Math.max(-1, Math.min(1, ax * 1.2)) : 0;
+    const steer = btn(14) ? -1 : btn(15) ? 1 : Math.abs(ax) > 0.15 ? Math.max(-1, Math.min(1, ax * 1.2)) : 0;
+    const lt = gp.buttons[6] ? gp.buttons[6].value || (gp.buttons[6].pressed ? 1 : 0) : 0;
+    const brake = btn(2) || btn(13) ? 1 : lt > 0.1 ? Math.min(1, lt * 1.2) : 0;
+    return { steer, brake };
   }
 
   // ------------------------------------------------------------ tilt
@@ -169,13 +211,12 @@ export class Controls {
   }
 
   // ------------------------------------------------------------ per frame
-  steer() {
-    const k = this.keySteer();
-    if (k) return k;
-    const t = this.touchSteer();
-    if (t) return t;
-    const p = this.padSteer();
-    if (p) return p;
-    return this.tiltSteer();
+  // Steering (-1..1) and brake (0..1) from whatever is being used.
+  read() {
+    const pad = this.pad();
+    const steer = this.keySteer() || this.touchSteer() || pad.steer || this.tiltSteer();
+    const brake = this.brakePtr.size > 0 || this.keyBrake() ? 1 : pad.brake;
+    this.paintBrake(brake > 0);
+    return { steer, brake };
   }
 }

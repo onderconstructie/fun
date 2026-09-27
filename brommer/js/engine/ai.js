@@ -73,7 +73,7 @@ function plan(race, r, ai) {
         const closing = r.speed * (1 + 0.12 * r.draft) - o.speed;
         if (closing < -1.5 * KMH) continue;
         if (!race.canSteal(r, o)) continue;
-        const score = (1 - dz / 2600) * (1.2 - dx) * (o.isPlayer ? 1.2 : 0.55) * (1 + o.boost / (25 * KMH));
+        const score = (1 - dz / 2600) * (1.2 - dx) * (o.isPlayer ? 1.2 : 0.55) * (1 + Math.max(0, o.boost) / (25 * KMH));
         if (score > bestScore) {
           bestScore = score;
           best = o;

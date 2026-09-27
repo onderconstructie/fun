@@ -1,6 +1,6 @@
-// In-race HUD: place, progress bar with every rider, speedometer with the
-// speed you stole, coins, countdown, banners and the "someone is coming up
-// behind you" warning.
+// In-race HUD: place, progress bar with every rider, speedometer with your
+// boost, coins, countdown, banners and the "someone is coming up behind you"
+// warning.
 
 import { KMH, MAX_BOOST } from '../config.js';
 
@@ -55,14 +55,15 @@ export class Hud {
       this.kmh.textContent = k;
       L.kmh = k;
     }
-    const kept = Math.round((P.base - P.base0) / KMH);
-    if (kept !== L.kept) {
-      this.stolen.textContent = kept > 0 ? `+${kept}` : `${kept}`;
-      this.stolen.classList.toggle('show', kept !== 0);
-      this.stolen.classList.toggle('neg', kept < 0);
-      L.kept = kept;
+    // Boost from stolen speed (+) or the slowdown after being robbed (−).
+    const b = Math.round(P.boost / KMH);
+    if (b !== L.boost) {
+      this.stolen.textContent = b > 0 ? `+${b}` : `−${-b}`;
+      this.stolen.classList.toggle('show', b !== 0);
+      this.stolen.classList.toggle('neg', b < 0);
+      L.boost = b;
     }
-    const tb = Math.round((P.boost / MAX_BOOST) * 100);
+    const tb = Math.round((Math.max(0, P.boost) / MAX_BOOST) * 100);
     if (tb !== L.tb) {
       this.turbo.style.transform = `scaleX(${Math.min(1, tb / 100)})`;
       L.tb = tb;

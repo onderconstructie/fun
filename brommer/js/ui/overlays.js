@@ -36,16 +36,17 @@ export class Overlays {
   }
 
   // ------------------------------------------------------------ tutorial
-  tutorial(onDone) {
+  // isNew: a returning player sees it once more after the rules changed.
+  tutorial(onDone, isNew = false) {
     const html = `<div class="panel tut">
-      <h2>Zo win je</h2>
+      <h2>${isNew ? 'Nieuw: remmen en boost' : 'Zo win je'}</h2>
       <div class="tut-grid">
         <div class="tut-card"><div class="tut-ico">
           <svg viewBox="0 0 64 40"><rect x="2" y="4" width="26" height="32" rx="6" fill="rgba(255,255,255,.14)" stroke="currentColor" stroke-width="2"/><rect x="36" y="4" width="26" height="32" rx="6" fill="rgba(255,255,255,.14)" stroke="currentColor" stroke-width="2"/><path d="M19 13l-7 7 7 7M45 13l7 7-7 7" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div><h3>Sturen</h3><p>Houd <b>links</b> of <b>rechts</b> ingedrukt. Gas geven gaat vanzelf.</p></div>
+        </div><h3>Sturen en remmen</h3><p>Houd <b>links</b> of <b>rechts</b> ingedrukt. Gas geven gaat vanzelf. Langzamer? Houd <b>REM</b> ingedrukt.</p></div>
         <div class="tut-card hot"><div class="tut-ico">
           <svg viewBox="0 0 64 40"><circle cx="18" cy="22" r="10" fill="#35b6ff"/><circle cx="44" cy="22" r="10" fill="#ff6b35"/><path d="M30 6l-4 9h6l-4 9" fill="none" stroke="#ffe14d" stroke-width="3" stroke-linejoin="round"/></svg>
-        </div><h3>Bots = snelheid pakken</h3><p>Rij tegen een andere brommer aan. Dan <b>pak jij zijn snelheid</b> en wordt hij trager!</p></div>
+        </div><h3>Bots = boost</h3><p>Rij tegen een andere brommer aan. Dan <b>pak jij zijn snelheid</b>: jij krijgt een boost en hij wordt even trager!</p></div>
         <div class="tut-card gold"><div class="tut-ico">
           <svg viewBox="0 0 64 40"><rect x="6" y="18" width="16" height="18" rx="2" fill="#c0c7d0"/><rect x="24" y="8" width="16" height="28" rx="2" fill="#f5c542"/><rect x="42" y="24" width="16" height="12" rx="2" fill="#d08a4a"/><text x="32" y="26" font-size="12" font-weight="800" text-anchor="middle" fill="#2a1a00">1</text></svg>
         </div><h3>Top 3 = muntjes</h3><p>Eindig bij de <b>eerste drie</b> voor veel muntjes. Koop er nieuwe brommers mee.</p></div>

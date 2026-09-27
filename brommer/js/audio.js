@@ -1,6 +1,6 @@
 // Synthesised sound (WebAudio): two-stroke engine, the rider next to you,
-// slipstream wind, stealing speed, bumps, cones, coins, countdown and a
-// finish fanfare. No audio files needed.
+// slipstream wind, brakes, stealing speed, bumps, cones, coins, countdown and
+// a finish fanfare. No audio files needed.
 //
 // Phones need two extra steps. Audio may only start inside a tap, and most
 // phones count the moment the finger lifts, so unlock() runs on every tap.
@@ -218,10 +218,11 @@ export class Sound {
     };
     this.wind = mkNoise('bandpass', 900, 0.6);
     this.rumble = mkNoise('bandpass', 420, 0.9);
+    this.hiss = mkNoise('bandpass', 2400, 1.4);
   }
 
   // Called every frame during a race.
-  engine(on, kmh, throttle, near, wind, offroad) {
+  engine(on, kmh, throttle, near, wind, offroad, brake = 0) {
     if (!this.ctx || !this.eng) return;
     const t = this.ctx.currentTime;
     const k = on && this.enabled ? 1 : 0;
@@ -245,6 +246,9 @@ export class Sound {
     this.wind.g.gain.setTargetAtTime(k * wind * 0.12, t, 0.15);
     this.wind.f.frequency.setTargetAtTime(600 + wind * 900, t, 0.2);
     this.rumble.g.gain.setTargetAtTime(k * offroad * 0.3, t, 0.08);
+    // Braking: tyres hiss, more at speed.
+    this.hiss.g.gain.setTargetAtTime(k * brake * Math.min(1, kmh / 35) * 0.16, t, 0.04);
+    this.hiss.f.frequency.setTargetAtTime(1600 + Math.min(200, kmh) * 12, t, 0.1);
     this.engineOn = on;
   }
 

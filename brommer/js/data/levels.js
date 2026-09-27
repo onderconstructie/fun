@@ -2,9 +2,9 @@
 // world). After that the game keeps going: every next level is a bit harder
 // than the one before ("nog moeilijker dan dat").
 //
-// The core rule shapes the difficulty: the fastest opponents are faster than
-// the moped you can afford by then, so winning usually means bumping the
-// others and taking their speed.
+// The core rule shapes the difficulty: the fastest opponents are a bit faster
+// than the moped you can afford by then, and the boost from bumping someone
+// lasts only a few seconds, so winning means bumping the others again and again.
 
 import { THEMES, THEME_ORDER } from './themes.js';
 import { BOSSES } from './riders.js';
@@ -23,11 +23,11 @@ const TITLES = {
 // you win every level once (E, km/u): [E, fastest above E, slowest below E, opponents].
 // A few riders are always slower than you: steal from them first to catch the rest.
 const FIELD = {
-  1: [40, 1, -10, 4], 2: [40, 4, -8, 5], 3: [44, 3, -9, 5],
-  4: [44, 5, -8, 6], 5: [44, 7, -7, 6], 6: [48, 6, -8, 6],
-  7: [48, 8, -8, 7], 8: [48, 10, -7, 7], 9: [52, 9, -8, 6],
-  10: [52, 11, -8, 7], 11: [52, 13, -7, 7], 12: [52, 14, -7, 6],
-  13: [56, 13, -8, 7], 14: [56, 15, -7, 7], 15: [56, 16, -6, 6],
+  1: [40, -1, -10, 4], 2: [40, 1, -8, 5], 3: [44, 0, -9, 5],
+  4: [44, 1, -8, 6], 5: [44, 2, -7, 6], 6: [48, 1, -8, 6],
+  7: [48, 3, -8, 7], 8: [48, 3, -7, 7], 9: [52, 2, -8, 6],
+  10: [52, 3, -8, 7], 11: [52, 4, -7, 7], 12: [52, 3, -7, 6],
+  13: [56, 2, -8, 7], 14: [56, 3, -7, 7], 15: [56, 3, -6, 6],
 };
 
 const HILLS = { polder: 0.15, bollen: 0.25, stad: 0.45, strand: 0.6, bos: 1 };
@@ -59,8 +59,8 @@ export function levelConfig(n) {
   const [E, up, down, n0] = FIELD[Math.min(n, MAIN_LEVELS)];
   let lo = E + down, hi = E + up, count = n0;
   if (extra) {
-    lo += 1.3 * extra;
-    hi += 1.3 * extra;
+    lo += extra;
+    hi += extra;
     count = isBossLevel(n) ? 6 : 7;
   }
   const skill = Math.min(0.96, 0.25 + 0.05 * k + 0.01 * extra);
@@ -78,7 +78,7 @@ export function levelConfig(n) {
     boss = {
       name: extra ? `Mega ${b.name}` : b.name,
       color: b.color, helmet: b.helmet, hat: b.hat,
-      top: hi + 4, skill: Math.min(0.98, skill + 0.15), aggr: Math.min(0.92, aggr + 0.2), dodge: Math.min(0.75, dodge + 0.15), accel: accel + 3, grab: 1.2,
+      top: hi + 2, skill: Math.min(0.98, skill + 0.15), aggr: Math.min(0.92, aggr + 0.2), dodge: Math.min(0.75, dodge + 0.15), accel: accel + 3, grab: 1.2,
     };
   }
   return {

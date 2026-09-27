@@ -157,13 +157,14 @@ app.startRace = (n) => {
     : `<small>Level ${n}</small>${esc(cfg.title)}`;
   race.countdown += 1.4;
   const showIntro = () => app.hud.banner(intro, 1.5, isBossLevel(n) ? 'boss' : 'intro');
-  if (!p.tutorialSeen) {
+  if (!p.tutorialSeen || p.tutorialV < 2) {
     app.paused = true;
     app.overlays.tutorial(() => {
       p.tutorialSeen = true;
+      p.tutorialV = 2;
       app.save();
       showIntro();
-    });
+    }, p.tutorialSeen);
   } else showIntro();
 };
 
@@ -253,7 +254,7 @@ function handleEvents(race) {
         if (e.att.isPlayer) {
           s.steal(e.combo);
           R.sparks(e.vic, e.att, '#7df9ff');
-          R.float(`+${e.gain} km/u`, '#7df9ff', true);
+          R.float(`BOOST +${e.gain}`, '#7df9ff', true);
           R.kick = 1;
           R.flash('#7df9ff', 0.28);
           app.haptic([15, 30, 20]);
@@ -362,7 +363,8 @@ function engineSound(race, on) {
   }
   const nearInfo = nearR ? { kmh: nearR.speed / KMH, level: 1 - bd / 2600, closing: ((nearR.speed - P.speed) / KMH) * Math.sign(P.z - nearR.z) } : null;
   const wind = Math.min(1, Math.max(0, (kmh - 35) / 110)) * 0.7 + P.draft * 0.5;
-  app.sound.engine(on, kmh, race.phase === 'countdown' ? 0.3 : 1, nearInfo, wind, P.offroad ? Math.min(1, kmh / 40) : 0);
+  const throttle = race.phase === 'countdown' ? 0.3 : P.brake ? 0.15 : 1;
+  app.sound.engine(on, kmh, throttle, nearInfo, wind, P.offroad ? Math.min(1, kmh / 40) : 0, P.brake);
 }
 
 // ---------------------------------------------------------------- main loop
@@ -393,7 +395,7 @@ function frame(now) {
   const race = app.race;
   const blocked = app.paused || app.overlays.blocking();
   if (!blocked) {
-    const input = { steer: app.controls.steer() };
+    const input = app.controls.read();
     app.acc += dt;
     let steps = 0;
     while (app.acc >= STEP && steps < 5) {
@@ -440,7 +442,7 @@ function boot() {
   app.sound.enabled = s.sound;
   app.renderer = new Renderer($('#road'));
   app.hud = new Hud();
-  app.controls = new Controls($('#controls'), { haptic: app.haptic, onPause: () => app.pause(), onHorn: () => app.horn() });
+  app.controls = new Controls($('#controls'), { haptic: app.haptic, onPause: () => app.pause(), onHorn: () => app.horn(), brakeBtn: $('#btn-brake') });
   app.overlays = new Overlays(app);
   app.screens = initScreens(app);
   resize();

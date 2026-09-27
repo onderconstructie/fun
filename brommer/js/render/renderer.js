@@ -461,7 +461,7 @@ export class Renderer {
     g.beginPath();
     g.ellipse(q.x, q.y, sw * 0.34, sw * 0.08, 0, 0, Math.PI * 2);
     g.fill();
-    // Exhaust flame when carrying stolen speed.
+    // Exhaust flame while boosting.
     const extra = this.race.stolen(r);
     if (extra > 6 * KMH && r.speed > 20 * KMH) {
       const k = clamp(extra / (40 * KMH), 0.3, 1);
@@ -484,6 +484,18 @@ export class Renderer {
     g.translate(q.x, q.y + bob);
     g.rotate(r.lean * 0.32 + wob);
     g.drawImage(sp.img, -sw / 2, -sh, sw, sh);
+    // Brake light.
+    if (r.brake > 0) {
+      const ly = -sh * 0.34, rad = sw * 0.3;
+      const grd = g.createRadialGradient(0, ly, 0, 0, ly, rad);
+      grd.addColorStop(0, 'rgba(255,235,235,0.95)');
+      grd.addColorStop(0.25, 'rgba(255,40,60,0.8)');
+      grd.addColorStop(1, 'rgba(255,0,30,0)');
+      g.fillStyle = grd;
+      g.beginPath();
+      g.ellipse(0, ly, rad, rad * 0.6, 0, 0, Math.PI * 2);
+      g.fill();
+    }
     g.restore();
     g.globalAlpha = prevA;
     // Dizzy stars after being robbed.
@@ -545,7 +557,7 @@ export class Renderer {
   // ------------------------------------------------------------ overlays
   effects(g, dt, P, W, H) {
     // Speed lines when going faster than your own moped.
-    const over = clamp((P.speed - P.base0) / (35 * KMH), 0, 1);
+    const over = clamp((P.speed - P.base) / (35 * KMH), 0, 1);
     if (over > 0.05 && !P.finished) {
       const n = this.lite ? 14 : 26;
       if (this.lines.length !== n) {
