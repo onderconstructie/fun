@@ -1,4 +1,6 @@
 // Offline support: network-first (always fresh when online), cache fallback.
+// Files are checked with the server each time, so an update shows up on the
+// next load instead of after the browser's own cache expires.
 const CACHE = 'brommer-finish-v1';
 const ASSETS = [
   './',
@@ -39,7 +41,7 @@ self.addEventListener('install', (e) => {
   e.waitUntil(
     caches
       .open(CACHE)
-      .then((c) => Promise.all(ASSETS.map((u) => c.add(u).catch(() => {}))))
+      .then((c) => Promise.all(ASSETS.map((u) => c.add(new Request(u, { cache: 'reload' })).catch(() => {}))))
       .then(() => self.skipWaiting()),
   );
 });
@@ -75,7 +77,7 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(
     (async () => {
       const cache = await caches.open(CACHE);
-      const net = fetch(req).then((res) => {
+      const net = fetch(req.mode === 'navigate' ? req : new Request(req, { cache: 'no-cache' })).then((res) => {
         if (res && res.ok && res.type === 'basic') cache.put(req, res.clone());
         return res;
       });
