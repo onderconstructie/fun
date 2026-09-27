@@ -17,18 +17,23 @@ export const STEER = 1.55; // lateral speed (road half-widths / s) at full lock 
 export const CF = 0.19; // centrifugal drift per unit of curve
 export const REF_SPEED = 50 * KMH; // speed at which steering and drift are "1"
 export const OFFROAD_TOP = 0.55; // share of base top speed on the grass
-export const BOOST_HALF = 8; // stolen speed halves every BOOST_HALF seconds
-export const MAX_BOOST = 70 * KMH;
 export const TOP_CAP = 170 * KMH;
 
-// Stealing speed.
+// Braking: hold REM to slow down; let go and the moped speeds up again by itself.
+export const BRAKE = 40; // km/u per second at full brake
+export const BRAKE_MIN = 8; // km/u: you can slow right down, but never quite stop
+
+// Stealing speed. What you take is a boost, not a faster moped: it stays at full
+// strength for BOOST_HOLD seconds and then fades (halving every BOOST_HALF
+// seconds). The victim gets the same as a slowdown.
 export const STEAL_FRAC = 0.42; // share of the victim's speed you take
 export const STEAL_MIN = 9; // km/u, a steal always feels worth it
 export const STEAL_MAX = 45; // km/u per steal
-export const PERM_SHARE = 0.4; // this part of a steal stays for the rest of the race (the victim loses it)
-export const PERM_FLOOR = 0.7; // a rider never drops below 70% of their own top speed
-export const REGEN = 0.8; // km/u per second: speed you lost grows back slowly (no hopeless races)
-export const ROOM = 95; // km/u of stolen speed after which steals give less and less
+export const BOOST_HOLD = 2.5;
+export const BOOST_HALF = 1.5;
+export const MAX_BOOST = 55 * KMH;
+export const SLOW_FLOOR = 0.55; // a robbed rider keeps at least this share of their own top speed
+export const ROOM = 95; // km/u of boost after which steals give less and less
 export const SURGE = 0.8; // share of the stolen speed you get immediately
 export const WOBBLE_T = 0.6; // victim wobbles (little steering) this long
 export const IMMUNE_T = 2; // victim cannot be robbed again this long

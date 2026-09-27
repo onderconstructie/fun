@@ -3,8 +3,9 @@
 // reads `events` after every step for sound, HUD and effects.
 
 import {
-  SEG, KMH, BIKE_W, BIKE_LEN, EDGE, STEER, CF, OFFROAD_TOP, BOOST_HALF, MAX_BOOST, TOP_CAP,
-  STEAL_FRAC, STEAL_MIN, STEAL_MAX, SURGE, WOBBLE_T, IMMUNE_T, PAIR_COOLDOWN, START_GRACE, PERM_SHARE, PERM_FLOOR, ROOM, REGEN,
+  SEG, KMH, BIKE_W, BIKE_LEN, EDGE, STEER, CF, OFFROAD_TOP, TOP_CAP, BRAKE, BRAKE_MIN,
+  STEAL_FRAC, STEAL_MIN, STEAL_MAX, BOOST_HOLD, BOOST_HALF, MAX_BOOST, SLOW_FLOOR, ROOM, SURGE,
+  WOBBLE_T, IMMUNE_T, PAIR_COOLDOWN, START_GRACE,
   DRAFT_DIST, DRAFT_W, DRAFT_TOP, DRAFT_ACC,
 } from '../config.js';
 import { Track } from './track.js';
@@ -80,7 +81,6 @@ export class Race {
       isPlayer,
       isBoss: !!o.isBoss,
       base: o.top * KMH,
-      base0: o.top * KMH,
       accel: o.accel * KMH,
       handling: o.handling ?? lerp(0.9, 1.1, o.skill ?? 0.5),
       grab: o.grab ?? 1,
@@ -89,7 +89,9 @@ export class Race {
       startZ: z,
       speed: 0,
       top: 0,
-      boost: 0,
+      boost: 0, // > 0: boost from stolen speed, < 0: slowed down after being robbed
+      boostT: 0, // the boost (or slowdown) stays at full strength this long, then fades
+      brake: 0,
       draft: 0,
       drafting: null,
       wobble: 0,
@@ -133,7 +135,8 @@ export class Race {
     }
     for (const r of this.racers) {
       const steer = r.ai ? aiSteer(this, r, dt) : input ? input.steer : 0;
-      this.move(r, dt, steer);
+      const brake = r.ai || !input ? 0 : input.brake || 0;
+      this.move(r, dt, steer, brake);
     }
     for (const t of this.track.traffic) {
       if (t.gone) continue;
@@ -151,7 +154,7 @@ export class Race {
     if (k > this.stats.topKmh) this.stats.topKmh = k;
   }
 
-  move(r, dt, steerIn) {
+  move(r, dt, steerIn, brakeIn = 0) {
     const seg = this.track.segAt(r.z);
     if (r.wobble > 0) r.wobble = Math.max(0, r.wobble - dt);
     if (r.immune > 0) r.immune = Math.max(0, r.immune - dt);
@@ -159,8 +162,12 @@ export class Race {
     if (r.hornT > 0) r.hornT -= dt;
     r.obsT -= dt;
     r.offroad = Math.abs(r.x) > 1.02;
-    r.boost *= Math.exp(-BOOST_DECAY * dt);
-    if (r.base < r.base0) r.base = Math.min(r.base0, r.base + REGEN * KMH * dt);
+    // A boost (or a slowdown) holds for a moment, then fades away.
+    if (r.boostT > 0) r.boostT = Math.max(0, r.boostT - dt);
+    else if (r.boost) {
+      r.boost *= Math.exp(-BOOST_DECAY * dt);
+      if (Math.abs(r.boost) < KMH) r.boost = 0;
+    }
     let top = (r.base + r.boost) * (1 + DRAFT_TOP * r.draft) * this.catchup(r);
     if (r.offroad) top = Math.min(top, r.base * OFFROAD_TOP);
     if (r.finished) top = Math.min(top, r.base * 0.75);
@@ -168,8 +175,11 @@ export class Race {
     r.top = top;
     let acc = r.accel * (1 + DRAFT_ACC * r.draft);
     if (r.wobble > 0) acc *= 0.25;
-    if (r.speed < top) r.speed = Math.min(top, r.speed + acc * (1 - 0.55 * (r.speed / top)) * dt);
-    else r.speed = top + (r.speed - top) * Math.exp(-(r.offroad ? 2.6 : 0.9) * dt);
+    // The moped gives gas by itself, unless you are braking.
+    r.brake = brakeIn;
+    if (r.speed > top) r.speed = top + (r.speed - top) * Math.exp(-(r.offroad ? 2.6 : 0.9) * dt);
+    else if (!brakeIn) r.speed = Math.min(top, r.speed + acc * (1 - 0.55 * (r.speed / top)) * dt);
+    if (brakeIn && r.speed > BRAKE_MIN * KMH) r.speed = Math.max(BRAKE_MIN * KMH, r.speed - BRAKE * KMH * brakeIn * dt);
 
     const sr = speedRatio(r);
     let s = steerIn;
@@ -281,20 +291,19 @@ export class Race {
 
   steal(att, vic) {
     const vk = vic.speed / KMH;
-    // Diminishing returns: a rider already full of stolen speed gains less (no runaway leaders).
+    // Diminishing returns: a rider already full of boost gains less (no runaway leaders).
     const room = clamp(1 - this.stolen(att) / (ROOM * KMH), 0.3, 1);
     const gain = clamp(STEAL_FRAC * vk, STEAL_MIN, STEAL_MAX) * att.grab * room;
     const g = gain * KMH;
-    // Part of it is yours for the rest of the race, the rest is a turbo that fades.
-    const perm = clamp(g * PERM_SHARE, 0, vic.base - vic.base0 * PERM_FLOOR);
-    att.base += perm;
-    att.boost = Math.min(MAX_BOOST, att.boost + g - perm);
+    // The thief gets a boost (and is rid of any slowdown) ...
+    att.boost = Math.min(MAX_BOOST, Math.max(0, att.boost) + g);
+    att.boostT = BOOST_HOLD;
     att.speed = Math.min(TOP_CAP, att.speed + g * SURGE);
-    // A strong grip (grab) also means you lose less when someone bumps you.
-    const hold = 1 / vic.grab;
-    vic.base -= perm * hold;
-    vic.speed = Math.max(vic.base * 0.45, vic.speed - g * hold);
-    vic.boost = Math.max(0, vic.boost - (g - perm) * hold);
+    // ... and the victim loses the same for a while. A strong grip (grab) means you lose less.
+    const loss = g / vic.grab;
+    vic.boost = Math.max(-vic.base * (1 - SLOW_FLOOR), vic.boost - loss);
+    if (vic.boost < 0) vic.boostT = BOOST_HOLD;
+    vic.speed = Math.max(vic.base * 0.45, vic.speed - loss);
     vic.wobble = WOBBLE_T;
     vic.immune = IMMUNE_T;
     const dir = Math.sign(vic.x - att.x) || (vic.x >= 0 ? 1 : -1);
@@ -312,9 +321,9 @@ export class Race {
     this.events.push({ type: 'steal', att, vic, gain: Math.round(gain), combo: att.isPlayer ? this.stats.combo : 0 });
   }
 
-  // Speed on top of the rider's own moped: kept part + fading turbo.
+  // Boost from stolen speed that is still running.
   stolen(r) {
-    return Math.max(0, r.base - r.base0) + r.boost;
+    return Math.max(0, r.boost);
   }
 
   separate(a, b, dx, dz) {
@@ -381,7 +390,7 @@ export class Race {
     r.obsT = 0.7;
     if (o.k === 'cone') {
       r.speed *= 0.72;
-      r.boost *= 0.6;
+      if (r.boost > 0) r.boost *= 0.6;
       r.wobble = Math.max(r.wobble, 0.45);
       o.gone = true;
       o.hitT = this.time;
@@ -391,7 +400,7 @@ export class Race {
       r.speed *= 0.88;
     } else if (o.k === 'barrier') {
       r.speed = Math.min(r.speed, r.base * 0.45);
-      r.boost *= 0.3;
+      if (r.boost > 0) r.boost *= 0.3;
       r.wobble = 0.6;
       const side = Math.sign(r.x - o.x) || -Math.sign(o.x) || 1;
       r.x = o.x + side * (o.w + BIKE_W * 0.45 + 0.02);
@@ -408,7 +417,7 @@ export class Race {
     // Rear-ending the tractor stops you behind it; clipping its side knocks you away.
     r.speed = behind ? Math.min(r.speed, t.speed * 0.8) : r.speed * 0.7;
     if (behind) r.z = t.z - 240;
-    r.boost *= 0.4;
+    if (r.boost > 0) r.boost *= 0.4;
     r.wobble = 0.5;
     const side = Math.sign(r.x - t.x) || -Math.sign(t.x) || 1;
     r.x = t.x + side * (t.w + BIKE_W * 0.5 + 0.03);

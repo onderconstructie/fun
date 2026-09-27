@@ -252,14 +252,15 @@ export function initScreens(app) {
     $('#s-help').innerHTML = `${topbar('Hoe speel je?')}
       <div class="help-body scroll"><div class="help-grid">
         <div class="help-card"><h3>Sturen</h3><p>Je brommer geeft zelf gas. Houd de <b>linkerkant</b> of <b>rechterkant</b> van het scherm ingedrukt om te sturen.</p></div>
-        <div class="help-card hot"><h3>Snelheid pakken!</h3><p>Bots tegen een andere brommer, van achteren of opzij. Dan <b>pak je zijn snelheid</b>: hij wordt trager, jij sneller. Een deel hou je de hele race, de rest is turbo die langzaam opraakt.</p></div>
-        <div class="help-card"><h3>Pas op!</h3><p>De anderen kunnen jouw snelheid ook pakken. Zie je onderaan een <b class="warn-chip">!</b>, dan komt er iemand snel achter je aan: stuur opzij!</p></div>
+        <div class="help-card"><h3>Remmen</h3><p>Houd <b>REM</b> ingedrukt om langzamer te gaan, bijvoorbeeld voor een tractor. Laat je los, dan geeft je brommer weer zelf gas.</p></div>
+        <div class="help-card hot"><h3>Snelheid pakken = boost!</h3><p>Bots tegen een andere brommer, van achteren of opzij. Dan <b>pak je zijn snelheid</b>: jij krijgt een boost van een paar seconden en hij wordt even trager. Wil je voorblijven? Blijf pakken!</p></div>
+        <div class="help-card"><h3>Pas op!</h3><p>De anderen kunnen jouw snelheid ook pakken. Zie je onderaan een <b class="warn-chip">!</b>, dan komt er iemand snel achter je aan. Stuur opzij, of rem en laat hem voorbij: dan pak jij hém van achteren.</p></div>
         <div class="help-card"><h3>Slipstream</h3><p>Rij vlak achter iemand. Je hebt dan minder wind tegen en haalt hem sneller in.</p></div>
         <div class="help-card"><h3>Toeter</h3><p>Tik op de <b>toeter</b>: wie vlak voor je rijdt, schrikt en verliest even wat snelheid.</p></div>
         <div class="help-card"><h3>Hindernissen</h3><p>Ontwijk pionnen, plassen, wegwerkzaamheden en tractors. Pak de <b>muntjes</b> op de weg.</p></div>
         <div class="help-card gold"><h3>Top 3 = muntjes</h3><p>Eindig bij de eerste drie en je krijgt <b>heel veel muntjes</b>. Hoe moeilijker het level, hoe meer. Koop er nieuwe brommers mee in de garage.</p></div>
         <div class="help-card"><h3>Levels</h3><p>Top 3 speelt het volgende level vrij. Elke wereld eindigt met een <b>baas</b>. Na level ${MAIN_LEVELS} gaat het door: nog moeilijker dan dat!</p></div>
-        <div class="help-card"><h3>Toetsenbord</h3><p>Pijltjes of A/D sturen · spatie toetert · Esc pauzeert. Een gamepad werkt ook.</p></div>
+        <div class="help-card"><h3>Toetsenbord</h3><p>Pijltjes of A/D sturen · pijltje omlaag of S remt · spatie toetert · Esc pauzeert. Een gamepad werkt ook.</p></div>
       </div>
       <p class="legal">Alle namen, brommers en plaatsen in Brommer &amp; the Finish zijn verzonnen. Gratis hobbyproject, geen reclame. Lettertype Barlow Condensed (SIL Open Font License).</p></div>`;
   }

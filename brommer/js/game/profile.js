@@ -25,6 +25,7 @@ function defaults() {
     settings: { ...DEFAULT_SETTINGS },
     stats: { races: 0, wins: 0, podiums: 0, steals: 0, coins: 0 },
     tutorialSeen: false,
+    tutorialV: 0, // 2: has seen the explanation of braking and the boost
   };
 }
 
