@@ -149,7 +149,7 @@ app.startRace = (n) => {
   if (p.settings.steer === 'tilt' && !app.controls.tilt) app.controls.enableTilt(true);
   resize();
   enterImmersive();
-  if (!history.state || !history.state.race) history.pushState({ race: 1 }, '');
+  markHistory();
   // First the level name, then 3-2-1-GO.
   const cfg = race.cfg;
   const intro = cfg.boss
@@ -193,6 +193,16 @@ app.resume = () => {
 app.horn = () => {
   if (app.state === 'race' && app.race && !app.paused && !app.overlays.blocking()) app.race.horn(app.race.player);
 };
+
+// During a race the back button pauses instead of leaving the page. An
+// embedded page may refuse history changes; the game works without them.
+function markHistory() {
+  try {
+    if (!history.state || !history.state.race) history.pushState({ race: 1 }, '');
+  } catch (e) {
+    /* ignore */
+  }
+}
 
 function enterImmersive() {
   const el = document.documentElement;
@@ -450,7 +460,7 @@ function boot() {
   window.addEventListener('pagehide', () => app.save());
   window.addEventListener('popstate', () => {
     if (app.state === 'race') {
-      history.pushState({ race: 1 }, '');
+      markHistory();
       app.pause();
     }
   });
@@ -487,8 +497,10 @@ function boot() {
   app.last = performance.now();
   requestAnimationFrame(frame);
 
-  if ('serviceWorker' in navigator && location.protocol === 'https:') {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+  try {
+    if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+  } catch (e) {
+    /* an embedded page may not use a service worker */
   }
 }
 
