@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1020">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Brommer Bende">
+  <meta name="description" content="Brommer Bende: race met brommers. Bots tegen de anderen en pak hun snelheid. Eindig in de top 3 voor muntjes en koop nieuwe brommers.">
+  <title>Brommer Bende – race met brommers</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preload" href="fonts/bc-800i-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/bc-800-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app" class="is-menu">
+    <canvas id="road" aria-hidden="true"></canvas>
+    <div id="menu-bg" aria-hidden="true"></div>
+
+    <!-- Steering: hold the left or right half of the screen -->
+    <div id="controls" hidden>
+      <div class="zone zone-l" id="zone-l"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="zone zone-r" id="zone-r"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4l8 8-8 8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    </div>
+
+    <!-- In-race HUD -->
+    <div id="hud" hidden>
+      <div class="hud-tl">
+        <div class="pos"><b id="h-pos">1e</b><small id="h-of">/8</small></div>
+        <div class="speedo">
+          <div class="kmh"><b id="h-kmh">0</b><small>km/u</small></div>
+          <div class="stolen" id="h-stolen" title="Gepakte snelheid die je deze race houdt">+0</div>
+          <div class="turbo" title="Turbo"><i id="h-turbo"></i></div>
+        </div>
+        <div class="lvl" id="level-tag">Level 1</div>
+      </div>
+      <div class="progress" aria-hidden="true"><div class="track" id="h-track"><span class="finish-flag"></span></div></div>
+      <div class="hud-tr">
+        <div class="hud-coins"><i class="coin"></i><b id="h-coins">0</b></div>
+        <button class="hud-btn" id="btn-pause" aria-label="Pauze"><svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
+      </div>
+      <button class="horn" id="btn-horn" aria-label="Toeter"><svg viewBox="0 0 40 32" aria-hidden="true"><circle cx="8" cy="16" r="7" fill="#2a2e35"/><path d="M14 13h9l13-9v24l-13-9h-9z" fill="currentColor"/><path d="M14 13h9v6h-9z" fill="#8b929c"/></svg><span>TOET</span></button>
+      <div id="countdown" aria-live="assertive"></div>
+      <div id="banner" aria-live="polite"></div>
+      <div id="warn" aria-hidden="true"><span>!</span></div>
+    </div>
+
+    <!-- Menu screens -->
+    <main id="screens">
+      <section class="screen" id="s-title">
+        <div class="title-wrap">
+          <div class="logo-mark" aria-hidden="true">
+            <svg viewBox="0 0 120 84"><defs><linearGradient id="fr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe14d"/><stop offset="1" stop-color="#ff8a1f"/></linearGradient></defs><path d="M4 34h14M1 45h12M6 56h8" stroke="#35b6ff" stroke-width="4" stroke-linecap="round"/><path d="M50 66H14" stroke="#9aa3ad" stroke-width="5" stroke-linecap="round"/><path d="M26 62L38 40M72 38l14-10M96 62L84 18M79 17h16" fill="none" stroke="#e8edf5" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="26" cy="62" r="15" fill="#0b1020" stroke="#fff" stroke-width="5"/><circle cx="96" cy="62" r="15" fill="#0b1020" stroke="#fff" stroke-width="5"/><path d="M30 38h46l-9 17H40z" fill="url(#fr)"/><rect x="45" y="52" width="22" height="13" rx="4" fill="#3b4250"/><rect x="24" y="27" width="32" height="9" rx="4.5" fill="#ff3b6b"/><circle cx="91" cy="29" r="5" fill="#fff6c8"/></svg>
+          </div>
+          <h1 class="logo-text">BROMMER <span>BENDE</span></h1>
+          <p class="tagline">Pak hun snelheid. Wees de eerste!</p>
+          <button class="btn btn-primary btn-xl pulse" id="btn-start"><span>Tik om te spelen</span></button>
+          <a class="back-home" href="../">← Onder Constructie</a>
+        </div>
+      </section>
+
+      <section class="screen" id="s-home" hidden>
+        <header class="topbar">
+          <div class="tb-logo">BROMMER <span>BENDE</span></div>
+          <div class="tb-right">
+            <div class="coins" id="coins-home"><i class="coin"></i><b>0</b></div>
+            <button class="icon-btn" id="btn-fullscreen" aria-label="Volledig scherm"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+            <button class="icon-btn" data-go="s-settings" aria-label="Instellingen"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zm8.4 5-.1-3 2-1.6-2-3.4-2.4.9a8 8 0 0 0-2.5-1.5L15 2h-4l-.4 2.5A8 8 0 0 0 8 6l-2.4-1-2 3.4 2 1.6a8 8 0 0 0 0 3l-2 1.6 2 3.4L8 18a8 8 0 0 0 2.6 1.5L11 22h4l.4-2.5A8 8 0 0 0 18 18l2.4.9 2-3.4z" fill="none" stroke="currentColor" stroke-width="1.7"/></svg></button>
+          </div>
+        </header>
+        <div class="home-grid">
+          <button class="tile tile-race" id="tile-race">
+            <span class="tile-icon"><svg viewBox="0 0 48 48"><path d="M9 44V5" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"/><path d="M11 7h28v20H11z" fill="#fff"/><path d="M11 7h7v5h-7zM25 7h7v5h-7zM18 12h7v5h-7zM32 12h7v5h-7zM11 17h7v5h-7zM25 17h7v5h-7zM18 22h7v5h-7zM32 22h7v5h-7z" fill="#1c0d00"/></svg></span>
+            <span class="tile-cta">Rijden!</span>
+            <span class="tile-kicker" id="race-level">Level 1</span>
+            <span class="tile-title" id="race-title">Eerste ritje</span>
+            <span class="tile-sub" id="race-world">De Polder</span>
+          </button>
+          <button class="tile tile-levels" data-go="s-levels">
+            <span class="tile-icon"><svg viewBox="0 0 48 48"><path d="M6 38l10-12 8 7 8-14 10 19z" fill="currentColor"/><circle cx="36" cy="11" r="4" fill="currentColor"/></svg></span>
+            <span class="tile-title">Levels</span>
+            <span class="tile-sub">5 werelden en nog moeilijker</span>
+          </button>
+          <button class="tile tile-garage" data-go="s-garage">
+            <canvas class="tile-moped" id="home-moped-cv" width="220" height="126" aria-hidden="true"></canvas>
+            <span class="tile-title">Garage</span>
+            <span class="tile-sub" id="home-moped">Snorretje</span>
+            <span class="badge" id="garage-badge" hidden>€</span>
+          </button>
+          <button class="tile tile-help" data-go="s-help">
+            <span class="tile-icon"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="19" fill="none" stroke="currentColor" stroke-width="3"/><path d="M18.5 19a5.5 5.5 0 1 1 8 4.9c-1.6.8-2.5 2-2.5 3.6V29" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/><circle cx="24" cy="35" r="2.2" fill="currentColor"/></svg></span>
+            <span class="tile-title">Uitleg</span>
+            <span class="tile-sub">Zo pak je hun snelheid</span>
+          </button>
+        </div>
+        <footer class="home-foot"><a class="link-btn" href="../">← Onder Constructie</a></footer>
+      </section>
+
+      <section class="screen" id="s-levels" hidden></section>
+      <section class="screen" id="s-garage" hidden></section>
+      <section class="screen" id="s-help" hidden></section>
+      <section class="screen" id="s-settings" hidden></section>
+    </main>
+
+    <div id="overlays"></div>
+    <div id="toast" role="status"></div>
+  </div>
+  <noscript><p style="color:#fff;padding:2rem;font-family:sans-serif">Brommer Bende heeft JavaScript nodig.</p></noscript>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
