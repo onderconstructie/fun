@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1020">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Bellenplop">
+  <meta name="description" content="Bellenplop: schiet bellen, maak groepjes van drie of meer van dezelfde kleur en laat de rest naar beneden vallen. 30 levels en een eindeloze modus.">
+  <title>Bellenplop</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preload" href="fonts/bc-800i-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/bc-800-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app" class="is-menu">
+    <canvas id="field" aria-label="Speelveld"></canvas>
+
+    <div id="hud" hidden>
+      <button class="icon-btn" id="btn-pause" aria-label="Pauze">
+        <svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.5" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1.5" fill="currentColor"/></svg>
+      </button>
+      <div class="hud-mid">
+        <b id="h-title">Level 1</b>
+        <small id="h-sub">schoten 0</small>
+      </div>
+      <div class="hud-score"><b id="h-score">0</b><small>punten</small></div>
+    </div>
+
+    <div id="tip" hidden>
+      <p id="tip-aim"><b>Sleep</b> om te mikken, <b>laat los</b> om te schieten.</p>
+      <p>Drie dezelfde kleur raken elkaar? <b>Plop!</b> Tik op je bel om te wisselen.</p>
+    </div>
+
+    <main id="screens">
+      <section class="screen" id="s-home">
+        <div class="home-top">
+          <button class="icon-btn" data-go="s-settings" aria-label="Instellingen">
+            <svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm8.4 4.6-1.9-.3a6.8 6.8 0 0 1-.6 1.5l1.1 1.6-1.6 1.6-1.6-1.1c-.5.3-1 .5-1.5.6l-.3 1.9h-2.3l-.3-1.9a6.8 6.8 0 0 1-1.5-.6l-1.6 1.1-1.6-1.6 1.1-1.6c-.3-.5-.5-1-.6-1.5l-1.9-.3v-2.3l1.9-.3c.1-.5.3-1 .6-1.5L4.5 7.4 6.1 5.8l1.6 1.1c.5-.3 1-.5 1.5-.6l.3-1.9h2.3l.3 1.9c.5.1 1 .3 1.5.6l1.6-1.1 1.6 1.6-1.1 1.6c.3.5.5 1 .6 1.5l1.9.3Z" fill="currentColor"/></svg>
+          </button>
+        </div>
+        <div class="logo" aria-hidden="true">
+          <canvas id="logo-cv" width="320" height="120"></canvas>
+        </div>
+        <h1 class="title">Bellen<span>plop</span></h1>
+        <p class="tag">Drie dezelfde? Plop!</p>
+        <div class="tiles">
+          <button class="tile tile-main" data-go="s-levels">
+            <span class="tile-title">Levels</span>
+            <span class="tile-sub" id="home-levels">30 levels</span>
+          </button>
+          <button class="tile" id="btn-endless">
+            <span class="tile-title">Eindeloos</span>
+            <span class="tile-sub" id="home-endless">Hoe lang hou jij het vol?</span>
+          </button>
+          <button class="tile" data-go="s-help">
+            <span class="tile-title">Uitleg</span>
+            <span class="tile-sub">Zo werkt het</span>
+          </button>
+        </div>
+        <footer class="home-foot"><a class="link-btn" href="../">← Onder Constructie</a></footer>
+      </section>
+
+      <section class="screen" id="s-levels" hidden>
+        <header class="bar"><button class="icon-btn" data-go="s-home" aria-label="Terug"><svg viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h2>Levels</h2><span class="bar-right" id="lv-stars">0 ★</span></header>
+        <div class="level-grid" id="level-grid"></div>
+      </section>
+
+      <section class="screen" id="s-help" hidden>
+        <header class="bar"><button class="icon-btn" data-go="s-home" aria-label="Terug"><svg viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h2>Uitleg</h2><span class="bar-right"></span></header>
+        <div class="help">
+          <div class="help-item"><i class="dot c3"></i><div><b>Mikken en schieten</b><p>Sleep je vinger over het veld om te mikken. De stippellijn toont waar je bel blijft plakken. Laat los om te schieten. Tegen de zijkant kaatst de bel terug.</p></div></div>
+          <div class="help-item"><i class="dot c0"></i><div><b>Drie dezelfde: plop</b><p>Raken drie of meer bellen van dezelfde kleur elkaar, dan ploppen ze.</p></div></div>
+          <div class="help-item"><i class="dot c2"></i><div><b>Laat ze vallen</b><p>Bellen die nergens meer aan het plafond hangen, vallen naar beneden. Dat geeft de meeste punten. Ook grijze stenen vallen zo weg: ploppen kunnen ze niet.</p></div></div>
+          <div class="help-item"><i class="dot c1"></i><div><b>Wisselen</b><p>Tik op je bel of op de volgende bel om ze om te wisselen.</p></div></div>
+          <div class="help-item"><i class="dot c5"></i><div><b>Pas op voor het plafond</b><p>De gele stippen tonen hoeveel missers je nog mag. Zijn ze op, dan zakt het plafond een rij. In de eindeloze modus komt er na elke reeks schoten een nieuwe rij bij. Komt een bel over de stippellijn onderaan, dan is het voorbij.</p></div></div>
+          <div class="help-item"><i class="dot c4"></i><div><b>Supersnoepjes</b><p>Laat je bellen vallen, dan loopt de ring rond je bel vol. Vol? Dan krijg je een <b>bom</b> die alles rondom wegblaast of een <b>regenboogbel</b> die de kleur aanneemt die het meest oplevert.</p></div></div>
+          <div class="help-item"><i class="dot star">★</i><div><b>Sterren</b><p>Hoe minder schoten je nodig hebt, hoe meer sterren. In elk level zie je bovenaan hoeveel schoten je mag gebruiken voor drie sterren.</p></div></div>
+        </div>
+      </section>
+
+      <section class="screen" id="s-settings" hidden>
+        <header class="bar"><button class="icon-btn" data-go="s-home" aria-label="Terug"><svg viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h2>Instellingen</h2><span class="bar-right"></span></header>
+        <div class="settings">
+          <label class="toggle"><span>Geluid</span><input type="checkbox" id="set-sound"><i></i></label>
+          <label class="toggle"><span>Trillen</span><input type="checkbox" id="set-vibration"><i></i></label>
+          <label class="toggle"><span>Vormpjes op de bellen<small>Handig als je sommige kleuren moeilijk uit elkaar houdt</small></span><input type="checkbox" id="set-shapes"><i></i></label>
+          <button class="btn btn-ghost" id="btn-reset">Voortgang wissen</button>
+        </div>
+      </section>
+    </main>
+
+    <div id="overlays"></div>
+  </div>
+  <noscript><p style="color:#fff;padding:2rem;font-family:sans-serif">Bellenplop heeft JavaScript nodig.</p></noscript>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
