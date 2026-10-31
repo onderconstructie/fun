@@ -41,10 +41,22 @@ if (!validGame(g)) g = null;
 const saveGame = () => write(KEY.game, g);
 
 // ---------- names ----------
-const NAMES4 = ['Jij', 'Rik', 'Lotte', 'Jef'];
-const NAMES2 = ['Jij', 'Jef'];
+// Geen namen: elke plaats heeft een rol en een eigen persoonsicoon.
+const NAMES4 = ['Jij', 'Tegenspeler links', 'Je partner', 'Tegenspeler rechts'];
+const NAMES2 = ['Jij', 'Tegenspeler'];
+const SHORT4 = ['Jij', 'Links', 'Partner', 'Rechts'];
+const SHORT2 = ['Jij', 'Tegenspeler'];
 const nameOf = (p) => (g.mode === 4 ? NAMES4 : NAMES2)[p];
+const shortOf = (p) => (g.mode === 4 ? SHORT4 : SHORT2)[p];
 const teamLabel = (t) => (g.mode === 4 ? ['Wij', 'Zij'][t] : ['Jij', NAMES2[1]][t]);
+// Strakke, vlakke persoonsiconen: zelfde hoofd en schouders, telkens een ander, duidelijk kapsel of hoofddeksel.
+const PERSON = {
+  me: '<path d="M8 33c0-6.6 5.4-11 12-11s12 4.4 12 11z"/><circle cx="20" cy="14" r="6.5"/><path class="hl" d="M13.4 13.2c0-4.6 3-7.4 6.6-7.4s6.6 2.8 6.6 7.4c-1.6-2.2-4-3.2-6.6-3.2s-5 1-6.6 3.2z"/>',
+  top: '<path d="M8 33c0-6.6 5.4-11 12-11s12 4.4 12 11z"/><circle cx="20" cy="15" r="6.5"/><circle class="hl" cx="20" cy="6.6" r="3.4"/><path class="hl" d="M13.4 14.4c0-4.2 3-6.6 6.6-6.6s6.6 2.4 6.6 6.6c-2-1.6-4.2-2.2-6.6-2.2s-4.6.6-6.6 2.2z"/>',
+  left: '<path d="M8 33c0-6.6 5.4-11 12-11s12 4.4 12 11z"/><circle cx="20" cy="15" r="6.5"/><path class="hl" d="M12.6 13.2h14.8v-1.6c0-3.6-3.2-6-7.4-6s-7.4 2.4-7.4 6z"/><rect class="hl" x="20" y="11.6" width="11" height="2.2" rx="1.1"/>',
+  right: '<path d="M8 33c0-6.6 5.4-11 12-11s12 4.4 12 11z"/><circle cx="20" cy="15" r="6.5"/><path class="hl" d="M12.2 16.5c-1.4-6.4 2.2-11 7.8-11s9.2 4.6 7.8 11c-.6-2.6-1.6-4.6-3-5.6-1.4 1-3.2 1.4-4.8 1.4s-3.4-.4-4.8-1.4c-1.4 1-2.4 3-3 5.6z"/><path class="hl" d="M12.2 16.5c.2 2.6.8 4.6 2 6l-1.4.4c-1.2-1.8-1.4-4.2-.6-6.4zM27.8 16.5c-.2 2.6-.8 4.6-2 6l1.4.4c1.2-1.8 1.4-4.2.6-6.4z"/>',
+};
+const personSVG = (p) => `<svg viewBox="6 3 28 30" aria-hidden="true">${PERSON[g.mode === 2 && p === 1 ? 'right' : posOf(p)]}</svg>`;
 const teamOf = (p) => E.teamOfFor(g.mode)(p);
 const posOf = (p) => (g.mode === 4 ? ['me', 'left', 'top', 'right'][p] : ['me', 'top'][p]);
 const suitWord = (s) => E.SUIT_NAME[s][0].toUpperCase() + E.SUIT_NAME[s].slice(1);
@@ -214,7 +226,7 @@ $('btn-last').addEventListener('click', () => {
   const d = g.deal;
   const t = d.tricks[d.tricks.length - 1];
   if (!t) return;
-  const figs = t.cards.map((x) => `<figure class="${x.p === t.winner ? 'win' : ''}">${cardHTML(x.c)}<figcaption>${nameOf(x.p)}</figcaption></figure>`).join('');
+  const figs = t.cards.map((x) => `<figure class="${x.p === t.winner ? 'win' : ''}">${cardHTML(x.c)}<figcaption>${shortOf(x.p)}</figcaption></figure>`).join('');
   overlay(`<div class="sheet"><h3>Vorige slag</h3><div class="last-trick">${figs}</div><p>${nameOf(t.winner)} won deze slag: ${t.pts} ${t.pts === 1 ? 'punt' : 'punten'}.</p><button class="btn btn-main" data-x="ok">Oké</button></div>`, () => {
     closeOverlay();
     step();
@@ -262,8 +274,8 @@ function seatHTML(p) {
     tags.push(`<span class="tag-s">${n} ${g.mode === 2 ? 'in hand' : n === 1 ? 'kaart' : 'kaarten'}</span>`);
   }
   const backs = p !== 0 && g.mode === 4 && posOf(p) === 'top' ? `<div class="backs">${d.hands[p].map(() => backHTML()).join('')}</div>` : '';
-  if (p === 0) return `<div class="avatar">J</div><div class="info">${tags.join('')}</div>`;
-  return `<div class="avatar">${nameOf(p)[0]}</div><div><div class="nm">${nameOf(p)}</div><div class="info">${tags.join('')}</div>${backs}</div>`;
+  if (p === 0) return `<div class="avatar">${personSVG(p)}</div><div class="info">${tags.join('')}</div>`;
+  return `<div class="avatar">${personSVG(p)}</div><div><div class="nm">${shortOf(p)}</div><div class="info">${tags.join('')}</div>${backs}</div>`;
 }
 
 function renderSeats(pd) {
@@ -619,7 +631,7 @@ function showDealEnd() {
   if (g.over) {
     const won = g.winner === 0;
     overlay(`<div class="sheet"><h3 class="${won ? 'win' : 'lose'}">${won ? 'Gewonnen!' : 'Verloren'}</h3>
-      <p>${head}. ${won ? (g.mode === 4 ? 'Jij en Lotte halen' : 'Jij haalt') : g.mode === 4 ? 'Rik en Jef halen' : `${nameOf(1)} haalt`} als eerste ${g.rules.target}.</p>
+      <p>${head}. ${won ? (g.mode === 4 ? 'Jij en je partner halen' : 'Jij haalt') : g.mode === 4 ? 'De tegenpartij haalt' : 'De tegenspeler haalt'} als eerste ${g.rules.target}.</p>
       <div class="res">${res}</div><div class="calc">${rows.join('')}</div>
       <p>Eindstand: ${score}</p>
       <div class="row"><button class="btn btn-ghost" data-x="home">Menu</button><button class="btn btn-main" data-x="again">Nog een spel</button></div></div>`, (x) => {

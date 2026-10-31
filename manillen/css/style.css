@@ -192,6 +192,11 @@ body.no-pts .card .pt { display: none; }
   transition: box-shadow 0.2s;
 }
 .seat.us .avatar { background: #6b5410; color: #fff3c4; }
+.avatar svg { width: 82%; height: 82%; display: block; fill: currentColor; }
+.avatar svg .hl { fill: var(--hl, #0f1a3a); }
+.seat.us .avatar { --hl: #3d2f08; }
+.seat.them .avatar { --hl: #16214a; }
+.seat .avatar { overflow: hidden; }
 .seat.turn .avatar { box-shadow: 0 0 0 3px var(--accent), 0 0 16px rgba(255, 210, 63, 0.55); }
 .seat .nm { font-size: 17px; line-height: 1; }
 .seat .info { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
