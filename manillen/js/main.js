@@ -1469,6 +1469,24 @@ window.addEventListener('resize', () => {
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && g) saveGame();
 });
+// ---------- als app installeren ----------
+{
+  const STANDALONE = matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
+  const IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const btn = $('btn-install');
+  let deferred = null;
+  if (btn && !STANDALONE) btn.hidden = false;
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e; });
+  addEventListener('appinstalled', () => { if (btn) btn.hidden = true; deferred = null; });
+  btn && btn.addEventListener('click', async () => {
+    if (deferred) { deferred.prompt(); const r = await deferred.userChoice; deferred = null; if (r.outcome === 'accepted') btn.hidden = true; return; }
+    const steps = IOS
+      ? '<li>Tik in je browser op de deelknop (vierkant met pijl omhoog).</li><li>Kies <b>Zet op beginscherm</b>.</li><li>Open Manillen voortaan via het nieuwe icoon.</li>'
+      : '<li>Tik in je browser rechtsboven op de drie puntjes <b>⋮</b>.</li><li>Kies <b>App installeren</b> of <b>Toevoegen aan startscherm</b>.</li><li>Open Manillen voortaan via het nieuwe icoon.</li>';
+    overlay(`<div class="sheet install-sheet"><h3>Speel als app</h3><p>Dan opent Manillen schermvullend, in één tik, ook zonder internet.</p><ol class="install-steps">${steps}</ol><button class="btn btn-main" data-x="ok">Begrepen</button></div>`, () => closeOverlay());
+  });
+}
+
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
