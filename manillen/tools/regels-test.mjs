@@ -3,7 +3,7 @@
 // the bidding flow, and plays many computer-only games where every move is checked.
 
 import * as E from '../js/engine.js';
-import { decide } from '../js/ai.js';
+import { decide, decidePlayWhy } from '../js/ai.js';
 import { makeRng } from '../js/util.js';
 
 let ok = 0;
@@ -185,6 +185,8 @@ for (let i = 0; i < 200; i++) {
       if (a.type === 'play') {
         moves++;
         if (!E.legalFor(g, pd.p).legal.includes(a.card)) t('computer speelt legaal', false);
+        const tip = decidePlayWhy(g, pd.p);
+        if (tip.card !== a.card || typeof tip.why !== 'string') t('tip = zelfde kaart als de computer, met reden', false);
       }
       E.act(g, a);
     }

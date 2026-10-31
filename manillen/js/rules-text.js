@@ -67,7 +67,7 @@ export function rulesHTML() {
     <p class="rule"><b>Kopen.</b> Heb je de gevraagde kleur niet en heeft de tegenpartij de slag? Dan moet je troef spelen. Ligt er al troef, dan moet je hoger troeven als je kunt.</p>
     <p class="rule"><b>Partner heeft de slag.</b> Dan hoef je niet hoger te gaan of te kopen. Je mag gewoon bijleggen, bijvoorbeeld een kaart met veel punten.</p>
     <p class="rule"><b>Niet ondertroeven.</b> Ligt er een hoge troef en kun je er niet over? Speel dan een andere kleur als je die hebt.</p>
-    <p class="hint">Op het scherm kun je alleen kaarten aantikken die mogen. Tik je op een grijze kaart, dan zie je waarom die niet mag.</p>
+    <p class="hint">Op het scherm lichten de kaarten op die mogen. Onder de tafel staat wat je moet doen, bijvoorbeeld bekennen of kopen. Tik je op een grijze kaart, dan zie je waarom die niet mag. Twijfel je? Tik op Tip.</p>
   </div></article>
 
   <article class="help-item" id="r-tellen"><i class="dot">7</i><div>

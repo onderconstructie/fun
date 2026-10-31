@@ -19,13 +19,19 @@ export function cardHTML(c, { tag = 'div', extra = '', attrs = '' } = {}) {
   const pts = points(c);
   const label = cardName(c) + (pts ? `, ${pts} ${pts === 1 ? 'punt' : 'punten'}` : '');
   const role = tag === 'div' ? 'role="img"' : '';
-  return `<${tag} class="card ${RED[s] ? 'red' : 'black'} r${r} ${extra}" data-c="${c}" ${role} aria-label="${label}" ${attrs}>`
+  const lab = attrs.includes('aria-label') ? '' : `aria-label="${label}"`;
+  return `<${tag} class="card ${RED[s] ? 'red' : 'black'} s-${s} r${r} ${extra}" data-c="${c}" ${role} ${lab} ${attrs}>`
     + `<span class="ix"><b>${r}</b>${pip(s, 'pip-ix')}</span>`
     + middle(s, r)
     + `<span class="ix ix2"><b>${r}</b>${pip(s, 'pip-ix')}</span>`
     + (pts ? `<i class="pt" aria-hidden="true">${pts}</i>` : '')
     + `</${tag}>`;
 }
+
+export const cardLabel = (c) => {
+  const pts = points(c);
+  return cardName(c) + (pts ? `, ${pts} ${pts === 1 ? 'punt' : 'punten'}` : '');
+};
 
 export const backHTML = (extra = '') => `<div class="card back ${extra}" aria-hidden="true"></div>`;
 

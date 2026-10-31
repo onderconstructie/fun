@@ -157,10 +157,11 @@ function discardCost(c, trump) {
 }
 const cheapest = (cards, trump) => cards.slice().sort((a, b) => discardCost(a, trump) - discardCost(b, trump))[0];
 
-export function decidePlay(g, p) {
+// Picks a card and says in one short reason code why (the Tip button explains it to the player).
+export function decidePlayWhy(g, p) {
   const d = g.deal;
   const { legal } = legalFor(g, p);
-  if (legal.length === 1) return legal[0];
+  if (legal.length === 1) return { card: legal[0], why: 'enige' };
   const trump = d.trump;
   const kn = knowledge(g, p);
   const team = teamOfFor(g.mode);
@@ -173,12 +174,12 @@ export function decidePlay(g, p) {
     if (sure.length) {
       const nonTrump = sure.filter((c) => suitOf(c) !== trump);
       const pool = nonTrump.length ? nonTrump : sure;
-      return pool.sort((a, b) => points(b) - points(a) || strength(b) - strength(a))[0];
+      return { card: pool.sort((a, b) => points(b) - points(a) || strength(b) - strength(a))[0], why: 'zeker' };
     }
     const mine = legal.filter((c) => trump != null && suitOf(c) === trump);
     const makers = team(d.chooser) === team(p);
     if (trump != null && makers && mine.length >= 3 && kn.unseen.some((c) => suitOf(c) === trump)) {
-      return mine.sort((a, b) => strength(a) - strength(b))[0]; // pull trumps with a small one
+      return { card: mine.sort((a, b) => strength(a) - strength(b))[0], why: 'troefhalen' }; // pull trumps with a small one
     }
     // otherwise lead something cheap; do not lead an ace while that manille is still out
     const scored = legal.map((c) => {
@@ -188,7 +189,7 @@ export function decidePlay(g, p) {
       return { c, v };
     });
     scored.sort((a, b) => a.v - b.v);
-    return scored[0].c;
+    return { card: scored[0].c, why: 'laag-uit' };
   }
 
   // ---- following ----
@@ -203,25 +204,30 @@ export function decidePlay(g, p) {
   if (team(win.p) === team(p)) {
     if (safe(win.c)) {
       // partner wins: throw points on it, but keep trumps
-      return legal.slice().sort((a, b) => {
+      const card = legal.slice().sort((a, b) => {
         const va = points(a) - (suitOf(a) === trump ? 3 + strength(a) * 0.5 : 0);
         const vb = points(b) - (suitOf(b) === trump ? 3 + strength(b) * 0.5 : 0);
         return vb - va;
       })[0];
+      return { card, why: points(card) ? 'partner-punten' : 'partner-laag' };
     }
     const safeW = winners.filter(safe);
-    if (safeW.length && trickPts >= 3) return safeW.sort((a, b) => points(b) - points(a))[0];
-    return cheapest(legal, trump);
+    if (safeW.length && trickPts >= 3) return { card: safeW.sort((a, b) => points(b) - points(a))[0], why: 'pakken-zeker' };
+    return { card: cheapest(legal, trump), why: 'goedkoop' };
   }
 
   const safeW = winners.filter(safe);
   if (safeW.length) {
     const sameSuit = safeW.filter((c) => suitOf(c) === led && suitOf(c) !== trump);
-    if (sameSuit.length) return sameSuit.sort((a, b) => points(b) - points(a) || strength(a) - strength(b))[0];
-    return safeW.sort((a, b) => strength(a) - strength(b))[0];
+    if (sameSuit.length) return { card: sameSuit.sort((a, b) => points(b) - points(a) || strength(a) - strength(b))[0], why: 'pakken-zeker' };
+    return { card: safeW.sort((a, b) => strength(a) - strength(b))[0], why: suitOf(safeW[0]) === trump && led !== trump ? 'kopen-laag' : 'pakken-zeker' };
   }
-  if (winners.length && trickPts >= 4) return winners.sort((a, b) => strength(b) - strength(a))[0];
-  return cheapest(legal, trump);
+  if (winners.length && trickPts >= 4) return { card: winners.sort((a, b) => strength(b) - strength(a))[0], why: 'gokken' };
+  return { card: cheapest(legal, trump), why: 'goedkoop' };
+}
+
+export function decidePlay(g, p) {
+  return decidePlayWhy(g, p).card;
 }
 
 export function decide(g, pd) {
