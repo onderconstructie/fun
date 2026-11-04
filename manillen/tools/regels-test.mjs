@@ -5,6 +5,7 @@
 import * as E from '../js/engine.js';
 import { decide, decidePlayWhy } from '../js/ai.js';
 import { makeRng } from '../js/util.js';
+import * as B from '../js/scoreboard.js';
 
 let ok = 0;
 let fail = 0;
@@ -194,6 +195,72 @@ for (let i = 0; i < 200; i++) {
   if (!g.over || Math.max(...g.scores) < g.rules.target) t('spel eindigt', false);
 }
 t('veel rondes gespeeld', deals > 1000);
+
+// ---- scorebord ----
+{
+  const rng = makeRng(4242);
+  const b = B.emptyBoard();
+  let wins = 0;
+  let losses = 0;
+  let streak = 0;
+  let best = 0;
+  for (let i = 0; i < 30; i++) {
+    const g = E.createGame(4, R, rng);
+    g.id = 'test' + i;
+    E.startDeal(g, rng);
+    let guard = 0;
+    while (!g.over && guard++ < 50000) {
+      const pd = E.pending(g);
+      if (pd.type === 'trick') E.act(g, { type: 'trick' });
+      else if (pd.type === 'end') E.act(g, { type: 'end', rng });
+      else E.act(g, decide(g, pd));
+    }
+    const sum = [0, 0];
+    let run = true;
+    g.log.forEach((l, k) => {
+      if (l.n !== k + 1) run = false;
+      if (l.winTeam !== null) sum[l.winTeam] += l.gained;
+      if (l.scores[0] !== sum[0] || l.scores[1] !== sum[1]) run = false;
+      if (l.taken[0] + l.taken[1] !== 60) run = false;
+    });
+    t('elke ronde staat op het scorebord', g.log.length === g.dealNo && g.log.length === B.roundsDone(g));
+    t('tussenstanden tellen op tot de eindstand', run && sum[0] === g.scores[0] && sum[1] === g.scores[1]);
+    if (g.winner === 0) {
+      wins++;
+      streak++;
+      best = Math.max(best, streak);
+    } else {
+      losses++;
+      streak = 0;
+    }
+    t('spel telt één keer mee', B.recordGame(b, g) === true && B.recordGame(b, g) === false);
+  }
+  const m = b.modes[4];
+  t('gewonnen en verloren kloppen', m.won === wins && m.lost === losses && wins + losses === 30);
+  t('reeksen kloppen', m.best === best && m.streak === streak);
+  t('andere modus blijft leeg', b.modes[2].won === 0 && b.modes[2].lost === 0);
+  t('hoogstens 20 spellen met rondes', b.recent.length === B.RECENT_MAX && b.recent[0].id === 'test29');
+  const again = B.normalize(JSON.parse(JSON.stringify(b)));
+  t('scorebord overleeft bewaren', JSON.stringify(again) === JSON.stringify(b));
+  for (const bad of [null, 5, 'x', {}, { v: 1 }, { v: 1, modes: 3, recent: 2 }, { v: 2, modes: {} }, { v: 1, modes: { 2: { won: -1, lost: 'a' } }, recent: [null, { mode: 9 }, { mode: 4, scores: [1], log: [] }] }]) {
+    const n = B.normalize(bad);
+    t('kapotte opslag wordt leeg', n.recent.length === 0 && n.modes[2].won === 0 && n.modes[2].lost === 0 && n.modes[4].won === 0);
+  }
+  const unfinished = E.createGame(2, R, rng);
+  t('onafgewerkt spel telt niet', B.recordGame(b, unfinished) === false);
+  t('oud bewaard spel zonder log krijgt er een', (() => {
+    const g = E.createGame(4, R, rng);
+    delete g.log;
+    E.startDeal(g, rng);
+    let guard = 0;
+    while (E.pending(g).type !== 'end' && guard++ < 5000) {
+      const pd = E.pending(g);
+      if (pd.type === 'over') break;
+      E.act(g, pd.type === 'trick' ? { type: 'trick' } : decide(g, pd));
+    }
+    return Array.isArray(g.log) && g.log.length === 1;
+  })());
+}
 
 console.log(`${ok} goed, ${fail} fout · ${deals} rondes, ${moves} computerzetten nagekeken`);
 process.exit(fail ? 1 : 0);

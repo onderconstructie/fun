@@ -1,6 +1,6 @@
 // Offline support: network-first (always fresh when online), cache fallback.
 // Same approach as the other Fun games; only removes its own old caches.
-const CACHE = 'manillen-v6';
+const CACHE = 'manillen-v7';
 const ASSETS = [
   './',
   'css/style.css',
@@ -19,6 +19,7 @@ const ASSETS = [
   'js/engine.js',
   'js/main.js',
   'js/rules-text.js',
+  'js/scoreboard.js',
   'js/sound.js',
   'js/util.js',
   'manifest.webmanifest',

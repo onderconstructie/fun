@@ -102,6 +102,7 @@ export function createGame(mode, rules, rng = Math.random) {
     over: false,
     winner: null,
     last: null, // summary of the previous deal
+    log: [], // one line per finished deal, for the scoreboard
   };
 }
 
@@ -338,6 +339,8 @@ function finishDeal(g) {
   d.result = r;
   d.phase = 'end';
   g.last = { dealNo: g.dealNo, taken: d.taken.slice(), result: r };
+  if (!Array.isArray(g.log)) g.log = []; // games saved before the scoreboard existed
+  g.log.push({ n: g.dealNo, trump: d.trump, blind: !!d.blind, taken: d.taken.slice(), mult: r.mult, gained: r.gained, winTeam: r.winTeam, scores: g.scores.slice() });
   const t = g.rules.target;
   if (g.scores[0] >= t || g.scores[1] >= t) {
     g.over = true;

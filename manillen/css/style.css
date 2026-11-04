@@ -618,6 +618,53 @@ table.pts td b { color: var(--accent); font-size: 18px; }
   .seat .backs { height: 21px; }
 }
 
+/* ---------- scoreboard ---------- */
+.sheet .row-next { grid-template-columns: auto 1fr; }
+.row-next .btn { padding: 0 14px; white-space: nowrap; }
+.hud-score { cursor: pointer; border-radius: 10px; }
+.score { width: min(100%, 620px); display: grid; gap: 10px; padding-bottom: 24px; }
+.score .btn { width: 100%; font-size: 20px; margin-top: 6px; }
+.sb-note { font-family: var(--body); font-weight: 500; font-size: 15px; line-height: 1.4; color: var(--muted); }
+.sb-now { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; background: var(--panel2); border: 1px solid var(--line); border-radius: 16px; padding: 12px 16px; font-variant-numeric: tabular-nums; }
+.sb-now > span { display: grid; justify-items: center; line-height: 1; }
+.sb-now small { font-size: 16px; color: var(--muted); }
+.sb-now b { font-size: 44px; font-weight: 800; font-style: italic; margin-top: 2px; }
+.sb-now .us b { color: var(--accent); } .sb-now .them b { color: var(--them); }
+.sb-goal { color: var(--muted); font-size: 16px; }
+.sb-table { width: 100%; border-collapse: collapse; background: var(--panel2); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; font-variant-numeric: tabular-nums; }
+.sb-table th { font-size: 14px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); padding: 10px 6px 6px; text-align: center; }
+.sb-table th.us { color: var(--accent); } .sb-table th.them { color: var(--them); }
+.sb-table td { padding: 7px 6px; text-align: center; border-top: 1px solid var(--line); font-size: 19px; vertical-align: middle; }
+.sb-table td b { font-size: 23px; font-weight: 800; font-style: italic; }
+.sb-table td small { display: block; font-size: 14px; color: var(--muted); line-height: 1; margin-top: 1px; }
+.sb-table td.us small { color: var(--accent); } .sb-table td.them small { color: var(--them); }
+.sb-n, .sb-p { color: var(--muted); }
+.sb-t { white-space: nowrap; }
+.sb-suit { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: var(--paper); vertical-align: middle; }
+.sb-suit .sicon { width: 18px; height: 18px; fill: var(--card-black); }
+.sb-suit.red .sicon { fill: var(--card-red); }
+body.four-color .sb-suit.s-r .sicon { fill: var(--card-blue); }
+body.four-color .sb-suit.s-k .sicon { fill: var(--card-green); }
+.sb-zt { font-size: 16px; color: var(--text); vertical-align: middle; }
+.sb-t .x { display: inline-block; margin-left: 4px; font-size: 14px; font-weight: 700; color: var(--accent-ink); background: var(--accent); border-radius: 7px; padding: 0 5px; line-height: 1.4; vertical-align: middle; }
+.sb-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sb-stat { background: var(--panel2); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; }
+.sb-stat h3 { font-size: 22px; font-weight: 800; font-style: italic; line-height: 1; margin-bottom: 8px; }
+.sb-stat dl > div { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 2px 0; }
+.sb-stat dt { font-size: 17px; color: var(--muted); }
+.sb-stat dd { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; margin: 0; }
+.sb-stat dd.us { color: var(--accent); }
+.sb-recent { display: grid; gap: 8px; }
+.sb-game { background: var(--panel2); border: 1px solid var(--line); border-radius: 14px; }
+.sb-game summary { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: baseline; padding: 10px 14px; min-height: 56px; cursor: pointer; list-style: none; }
+.sb-game summary::-webkit-details-marker { display: none; }
+.sb-game summary small { grid-column: 1 / -1; font-size: 15px; color: var(--muted); }
+.sb-res { font-size: 21px; font-weight: 800; font-style: italic; color: #ff8a9e; }
+.sb-res.won { color: var(--accent); }
+.sb-final { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.sb-game .sb-table { border-width: 1px 0 0; border-radius: 0 0 14px 14px; }
+.sb-game .sb-note { padding: 0 14px 12px; }
+
 /* ---------- phone on its side ---------- */
 #table.land #hud { grid-template-columns: 44px auto minmax(0, 1fr) auto; grid-template-areas: "menu mid bar score"; gap: 10px; }
 #table.land .hud-mid { min-height: 40px; grid-auto-flow: column; align-items: center; gap: 8px; }

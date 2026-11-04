@@ -39,7 +39,7 @@
           <span class="trump-chip" id="h-trump">Troef?</span>
           <small id="h-round">Ronde 1</small>
         </button>
-        <div class="hud-score" id="h-score"></div>
+        <button class="hud-score" id="h-score"></button>
         <div id="roundbar"></div>
       </header>
 
@@ -86,6 +86,10 @@
             <span class="tile-title">Met twee</span>
             <span class="tile-sub">Jij tegen één, met kaarten op tafel</span>
           </button>
+          <button class="tile" data-go="s-score">
+            <span class="tile-title">Scorebord</span>
+            <span class="tile-sub">Rondes en uitslagen</span>
+          </button>
           <button class="tile" data-go="s-rules">
             <span class="tile-title">Spelregels</span>
             <span class="tile-sub">Uitleg en varianten</span>
@@ -100,6 +104,11 @@
           <a href="#r-doel">Doel</a><a href="#r-kaarten">Kaarten</a><a href="#r-troef">Troef</a><a href="#r-mee">Meegaan</a><a href="#r-spelen">Spelen</a><a href="#r-tellen">Tellen</a><a href="#r-twee">Met twee</a><a href="#r-var" class="hot">Varianten</a>
         </nav>
         <div class="help" id="rules-body"></div>
+      </section>
+
+      <section class="screen" id="s-score" hidden>
+        <header class="bar"><button class="icon-btn" id="score-back" aria-label="Terug"><svg viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h2>Scorebord</h2><span class="bar-right"></span></header>
+        <div class="score" id="score-body"></div>
       </section>
 
       <section class="screen" id="s-settings" hidden>

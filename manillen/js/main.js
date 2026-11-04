@@ -5,6 +5,7 @@ import { decide, decidePlayWhy, decideTrump, decideMee, decideTerug, decideBlind
 import { cardHTML, backHTML, suitIcon, cardLabel } from './cards.js';
 import { rulesHTML, VARIANTS } from './rules-text.js';
 import * as S from './sound.js';
+import * as B from './scoreboard.js';
 
 const $ = (id) => document.getElementById(id);
 const app = $('app');
@@ -16,7 +17,7 @@ const wait = (ms) => ms * tempo();
 const dur = (ms) => (reduced() ? 0 : Math.max(1, ms * tempo()));
 
 // ---------- storage (own prefix, never clear everything) ----------
-const KEY = { rules: 'manillen.regels', game: 'manillen.spel', view: 'manillen.weergave', tour: 'manillen.rondleiding' };
+const KEY = { rules: 'manillen.regels', game: 'manillen.spel', view: 'manillen.weergave', tour: 'manillen.rondleiding', board: 'manillen.scorebord' };
 function read(k, fallback) {
   try {
     const v = JSON.parse(localStorage.getItem(k) || 'null');
@@ -59,6 +60,7 @@ if (!validGame(g)) {
   g = null;
 }
 const saveGame = () => write(KEY.game, g);
+let board = B.normalize(read(KEY.board, null));
 
 // ---------- roles and icons ----------
 // Geen namen: elke plaats heeft een rol en een eigen persoonsicoon.
@@ -128,11 +130,13 @@ function announce(text) {
 // ---------- screens ----------
 let rulesFrom = 's-home';
 let settingsFrom = 's-home';
+let scoreFrom = 's-home';
 function show(id) {
   document.querySelectorAll('.screen').forEach((s) => (s.hidden = s.id !== id));
   if (id === 's-home') refreshHome();
   if (id === 's-rules') buildRules();
   if (id === 's-settings') buildSettings();
+  if (id === 's-score') buildScore();
   const scr = $(id);
   if (scr) {
     scr.scrollTop = 0;
@@ -156,6 +160,7 @@ function toScreen(id, from) {
   closeOverlay();
   if (id === 's-rules') rulesFrom = from;
   if (id === 's-settings') settingsFrom = from;
+  if (id === 's-score') scoreFrom = from;
   $('table').hidden = true;
   $('screens').hidden = false;
   app.classList.add('is-menu');
@@ -189,10 +194,12 @@ function refreshHome() {
 document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => {
   rulesFrom = 's-home';
   settingsFrom = 's-home';
+  scoreFrom = 's-home';
   show(b.dataset.go);
 }));
 $('rules-back').addEventListener('click', () => back(rulesFrom));
 $('settings-back').addEventListener('click', () => back(settingsFrom));
+$('score-back').addEventListener('click', () => back(scoreFrom));
 $('btn-resume').addEventListener('click', () => g && toTable());
 $('btn-four').addEventListener('click', () => askNew(4));
 $('btn-two').addEventListener('click', () => askNew(2));
@@ -265,6 +272,78 @@ document.querySelector('.rules-nav').addEventListener('click', (e) => {
   const t = document.querySelector(a.getAttribute('href'));
   if (t) t.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' });
 });
+
+// ---------- scoreboard screen ----------
+const sideNames = (mode) => (mode === 4 ? ['Wij', 'Zij'] : ['Jij', 'Tegen']);
+function trumpCell(l) {
+  const x = l.winTeam !== null && l.mult > 1 ? `<span class="x">×${l.mult}</span>` : '';
+  if (l.trump === null) return `<span class="sb-zt">${l.blind ? 'Blind' : 'Zonder'}</span>${x}`;
+  return `<span class="sb-suit ${colorCls(l.trump)}" role="img" aria-label="${suitWord(l.trump)}">${suitIcon(l.trump, colorCls(l.trump))}</span>${x}`;
+}
+function roundsTable(log, mode) {
+  const names = sideNames(mode);
+  const rows = log.slice().reverse().map((l) => {
+    const cell = (t) => `<td class="${t === 0 ? 'us' : 'them'}"><b>${l.scores[t]}</b>${l.winTeam === t ? `<small>+${l.gained}</small>` : ''}</td>`;
+    return `<tr><td class="sb-n">${l.n}</td><td class="sb-t">${trumpCell(l)}</td><td class="sb-p">${l.winTeam === null ? 'gelijk' : `${l.taken[0]}–${l.taken[1]}`}</td>${cell(0)}${cell(1)}</tr>`;
+  }).join('');
+  return `<table class="sb-table"><thead><tr><th scope="col">Ronde</th><th scope="col">Troef</th><th scope="col">Punten</th><th scope="col" class="us">${names[0]}</th><th scope="col" class="them">${names[1]}</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+function currentGameHTML() {
+  const names = sideNames(g.mode);
+  const log = Array.isArray(g.log) ? g.log : [];
+  const done = B.roundsDone(g);
+  const missing = log.length < done;
+  return `<p class="sub-h">${g.over ? 'Laatste spel' : 'Dit spel'}</p>
+    <div class="sb-now" role="img" aria-label="Stand: ${teamLabel(0)} ${g.scores[0]}, ${teamLabel(1)} ${g.scores[1]}, spelen tot ${g.rules.target}">
+      <span class="us"><small>${names[0]}</small><b>${g.scores[0]}</b></span><span class="sb-goal">tot ${g.rules.target}</span><span class="them"><small>${names[1]}</small><b>${g.scores[1]}</b></span>
+    </div>
+    ${log.length ? roundsTable(log, g.mode) : ''}
+    ${!done ? '<p class="sb-note">Nog geen ronde uitgespeeld.</p>' : ''}
+    ${missing ? '<p class="sb-note">Rondes van voor het scorebord staan hier niet bij.</p>' : ''}`;
+}
+function statHTML(mode) {
+  const s = board.modes[mode];
+  return `<div class="sb-stat"><h3>Met ${mode === 4 ? 'vier' : 'twee'}</h3><dl><div><dt>Gewonnen</dt><dd class="us">${s.won}</dd></div><div><dt>Verloren</dt><dd>${s.lost}</dd></div><div><dt>Beste reeks</dt><dd>${s.best}</dd></div></dl></div>`;
+}
+const dateFmt = (t) => {
+  try {
+    return new Date(t).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch (e) {
+    return '';
+  }
+};
+function recentHTML() {
+  const list = board.recent.filter((r) => !(g && r.id === g.id));
+  if (!list.length) return '';
+  return `<p class="sub-h">Laatste spellen</p><div class="sb-recent">${list.map((r) => {
+    const names = sideNames(r.mode);
+    const rounds = `${r.rounds} ${r.rounds === 1 ? 'ronde' : 'rondes'}`;
+    return `<details class="sb-game"><summary><span class="sb-res ${r.won ? 'won' : ''}">${r.won ? 'Gewonnen' : 'Verloren'}</span><b class="sb-final" aria-label="${names[0]} ${r.scores[0]}, ${names[1]} ${r.scores[1]}">${r.scores[0]}–${r.scores[1]}</b><small>Met ${r.mode === 4 ? 'vier' : 'twee'} · ${dateFmt(r.at)} · ${rounds}</small></summary>${r.log.length ? roundsTable(r.log, r.mode) : '<p class="sb-note">De rondes van dit spel zijn niet bewaard.</p>'}</details>`;
+  }).join('')}</div>`;
+}
+function buildScore() {
+  const any = B.hasResults(board);
+  $('score-body').innerHTML = `${g ? currentGameHTML() : ''}
+    <p class="sub-h">Alle spellen</p>
+    <div class="sb-stats">${statHTML(4)}${statHTML(2)}</div>
+    <p class="sb-note">${any ? 'Alleen uitgespeelde spellen tellen. Je uitslagen blijven op dit toestel.' : 'Speel een spel uit, dan komt de uitslag hier te staan. Je uitslagen blijven op dit toestel.'}</p>
+    ${recentHTML()}
+    ${any ? '<button class="btn btn-ghost" id="btn-score-wipe">Uitslagen wissen</button>' : ''}`;
+  const wipe = $('btn-score-wipe');
+  if (wipe) wipe.addEventListener('click', () => {
+    overlay(`<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dlg-t"><h3 id="dlg-t">Uitslagen wissen?</h3><p>Alle uitslagen en reeksen verdwijnen. Dit kun je niet ongedaan maken. Een lopend spel blijft staan.</p>
+      <div class="row"><button class="btn btn-ghost" data-x="no">Nee</button><button class="btn btn-main" data-x="yes">Ja, wissen</button></div></div>`, (x) => {
+      closeOverlay();
+      if (x === 'yes') {
+        board = B.emptyBoard();
+        write(KEY.board, null);
+      }
+      buildScore();
+      const h = document.querySelector('#s-score h2');
+      if (h) h.focus({ preventScroll: true });
+    });
+  });
+}
 
 // ---------- settings screen ----------
 function segHTML(key, opts, label) {
@@ -356,12 +435,14 @@ function openPause() {
   overlay(`<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dlg-t"><h3 id="dlg-t">Pauze</h3>
     <p>${teamLabel(0)} <b class="us-t">${g.scores[0]}</b> · ${teamLabel(1)} <b>${g.scores[1]}</b> · tot ${g.rules.target}</p>
     <button class="btn btn-main" data-x="go">Verder spelen</button>
+    <button class="btn btn-ghost" data-x="score">Scorebord</button>
     <div class="row"><button class="btn btn-ghost" data-x="settings">Instellingen</button><button class="btn btn-ghost" data-x="rules">Spelregels</button></div>
     <div class="row"><button class="btn btn-ghost" data-x="again">Nieuw spel</button><button class="btn btn-ghost" data-x="home">Menu</button></div>
     <p class="fine">Je spel blijft bewaard, ook als je de pagina sluit.</p></div>`, (x) => {
     closeOverlay();
     if (x === 'rules') toScreen('s-rules', 'table');
     else if (x === 'settings') toScreen('s-settings', 'table');
+    else if (x === 'score') toScreen('s-score', 'table');
     else if (x === 'home') toMenu();
     else if (x === 'again') {
       const mode = g.mode;
@@ -463,8 +544,7 @@ function renderHud(pd) {
   const trumpName = d.trump === undefined ? 'nog niet gekozen' : d.trump === null ? (d.blind ? 'blind zonder troef' : 'zonder troef') : E.SUIT_NAME[d.trump];
   $('h-mid').setAttribute('aria-label', `Troef: ${trumpName}${m > 1 ? `, deze ronde telt ${m} keer` : ''}. Tik voor uitleg.`);
   $('h-score').innerHTML = `<small>Stand</small><div class="sc2"><b class="us">${g.scores[0]}</b><span>–</span><b class="them">${g.scores[1]}</b></div><small>tot ${g.rules.target}</small>`;
-  $('h-score').setAttribute('aria-label', `Stand: ${teamLabel(0)} ${g.scores[0]}, ${teamLabel(1)} ${g.scores[1]}, spelen tot ${g.rules.target}`);
-  $('h-score').setAttribute('role', 'img');
+  $('h-score').setAttribute('aria-label', `Stand: ${teamLabel(0)} ${g.scores[0]}, ${teamLabel(1)} ${g.scores[1]}, spelen tot ${g.rules.target}. Open het scorebord.`);
   renderBar(pd);
 }
 
@@ -942,6 +1022,8 @@ $('h-mid').addEventListener('click', () => {
   toast(txt, 5200);
 });
 
+$('h-score').addEventListener('click', () => g && toScreen('s-score', 'table'));
+
 // ---------- playing a card: tap, tap-tap, drag or keyboard ----------
 let fly = null;
 function tryPlay(c, el, via) {
@@ -1286,6 +1368,7 @@ function confetti() {
   return `<div class="confetti" aria-hidden="true">${out}</div>`;
 }
 
+let endHeard = null; // coming back from the scoreboard shows the sheet again, without the sound
 function showDealEnd() {
   const d = g.deal;
   const r = d.result;
@@ -1304,17 +1387,33 @@ function showDealEnd() {
   }
   const body = `${endBar(d, r)}${whoGot(d)}<div class="calc">${rows.join('')}</div>${standBars(r)}`;
   const goodForUs = !r.tie && win === 0;
+  const heardKey = `${g.id}:${g.dealNo}`;
+  const firstTime = endHeard !== heardKey;
+  endHeard = heardKey;
   if (g.over) {
     const won = g.winner === 0;
-    sfx(won ? 'win' : 'lose');
-    haptic(won ? [20, 60, 20, 60, 40] : 30);
+    if (firstTime) {
+      sfx(won ? 'win' : 'lose');
+      haptic(won ? [20, 60, 20, 60, 40] : 30);
+    }
+    if (B.recordGame(board, g)) {
+      write(KEY.board, board);
+      saveGame();
+    }
+    const tally = board.modes[g.mode];
     overlay(`${won ? confetti() : ''}<div class="sheet sheet-end ${won ? 'won' : 'lost'}" role="dialog" aria-modal="true" aria-labelledby="dlg-t">
       <p class="eyebrow">Einde van het spel</p>
       <h3 id="dlg-t" class="${won ? 'win' : 'lose'}">${won ? 'Gewonnen!' : 'Verloren'}</h3>
       <p class="lead">${won ? (g.mode === 4 ? 'Jij en je partner halen' : 'Jij haalt') : g.mode === 4 ? 'De tegenpartij haalt' : 'De tegenspeler haalt'} als eerste ${g.rules.target}. ${head}.</p>
       ${body}
-      <div class="row"><button class="btn btn-ghost" data-x="home">Menu</button><button class="btn btn-main" data-x="again">Nog een spel</button></div></div>`, (x) => {
+      <p class="fine">Met ${g.mode === 4 ? 'vier' : 'twee'}: ${tally.won} gewonnen, ${tally.lost} verloren.</p>
+      <button class="btn btn-ghost" data-x="score">Scorebord</button>
+      <div class="row row-next"><button class="btn btn-ghost" data-x="home">Menu</button><button class="btn btn-main" data-x="again">Nog een spel</button></div></div>`, (x) => {
       closeOverlay();
+      if (x === 'score') {
+        toScreen('s-score', 'table');
+        return;
+      }
       const mode = g.mode;
       g = null;
       write(KEY.game, null);
@@ -1324,11 +1423,15 @@ function showDealEnd() {
     animateEnd();
     return;
   }
-  sfx(goodForUs ? 'round' : 'trick-them');
+  if (firstTime) sfx(goodForUs ? 'round' : 'trick-them');
   overlay(`<div class="sheet sheet-end" role="dialog" aria-modal="true" aria-labelledby="dlg-t"><p class="eyebrow">Ronde ${g.dealNo}</p><h3 id="dlg-t" class="${goodForUs ? 'win' : ''}">${head}</h3>
     ${body}
-    <button class="btn btn-main" data-x="next">Volgende ronde</button></div>`, () => {
+    <div class="row row-next"><button class="btn btn-ghost" data-x="score">Scorebord</button><button class="btn btn-main" data-x="next">Volgende ronde</button></div></div>`, (x) => {
     closeOverlay();
+    if (x === 'score') {
+      toScreen('s-score', 'table');
+      return;
+    }
     E.act(g, { type: 'end' });
     lastSaid = 0;
     trickKey = '';
@@ -1510,6 +1613,6 @@ $('logo').innerHTML = ['kH', 'h10', 'sA'].map((c) => cardHTML(c)).join('');
 applyView();
 
 // Test hook for automated checks (harmless in normal play).
-window.__mn = { get g() { return g; }, E, archive, step, newGame, tip: () => decidePlayWhy(g, 0) };
+window.__mn = { get g() { return g; }, get board() { return board; }, E, archive, step, newGame, tip: () => decidePlayWhy(g, 0) };
 
 toMenu();
