@@ -86,14 +86,21 @@
             <span class="tile-title">Met twee</span>
             <span class="tile-sub">Jij tegen één, met kaarten op tafel</span>
           </button>
-          <button class="tile" data-go="s-score">
+          <button class="tile" data-go="s-tally">
+            <span class="tile-ico tally" aria-hidden="true"><svg viewBox="0 0 42 42"><path d="M9 8v26M16 8v26M23 8v26M30 8v26M5 28 34 13" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg></span>
             <span class="tile-title">Scorebord</span>
-            <span class="tile-sub">Rondes en uitslagen</span>
+            <span class="tile-sub" id="tally-sub">Voor als je met echte kaarten speelt</span>
           </button>
-          <button class="tile" data-go="s-rules">
-            <span class="tile-title">Spelregels</span>
-            <span class="tile-sub">Uitleg en varianten</span>
-          </button>
+          <div class="tile-pair">
+            <button class="tile" data-go="s-score">
+              <span class="tile-title">Uitslagen</span>
+              <span class="tile-sub">Tegen de computer</span>
+            </button>
+            <button class="tile" data-go="s-rules">
+              <span class="tile-title">Spelregels</span>
+              <span class="tile-sub">En varianten</span>
+            </button>
+          </div>
         </div>
         <footer class="home-foot"><button class="link-btn install-btn" id="btn-install" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 21h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Zet Manillen op je beginscherm</button></footer>
       </section>
@@ -107,8 +114,13 @@
       </section>
 
       <section class="screen" id="s-score" hidden>
-        <header class="bar"><button class="icon-btn" id="score-back" aria-label="Terug"><svg viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h2>Scorebord</h2><span class="bar-right"></span></header>
+        <header class="bar"><button class="icon-btn" id="score-back" aria-label="Terug"><svg viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h2>Uitslagen</h2><span class="bar-right"></span></header>
         <div class="score" id="score-body"></div>
+      </section>
+
+      <section class="screen" id="s-tally" hidden>
+        <header class="bar"><button class="icon-btn" id="tally-back" aria-label="Terug"><svg viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h2>Scorebord</h2><span class="bar-right"></span></header>
+        <div class="score" id="tally-body"></div>
       </section>
 
       <section class="screen" id="s-settings" hidden>

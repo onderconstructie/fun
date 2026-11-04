@@ -6,6 +6,7 @@ import { cardHTML, backHTML, suitIcon, cardLabel } from './cards.js';
 import { rulesHTML, VARIANTS } from './rules-text.js';
 import * as S from './sound.js';
 import * as B from './scoreboard.js';
+import * as T from './tally.js';
 
 const $ = (id) => document.getElementById(id);
 const app = $('app');
@@ -17,7 +18,7 @@ const wait = (ms) => ms * tempo();
 const dur = (ms) => (reduced() ? 0 : Math.max(1, ms * tempo()));
 
 // ---------- storage (own prefix, never clear everything) ----------
-const KEY = { rules: 'manillen.regels', game: 'manillen.spel', view: 'manillen.weergave', tour: 'manillen.rondleiding', board: 'manillen.scorebord' };
+const KEY = { rules: 'manillen.regels', game: 'manillen.spel', view: 'manillen.weergave', tour: 'manillen.rondleiding', board: 'manillen.scorebord', tally: 'manillen.telblad' };
 function read(k, fallback) {
   try {
     const v = JSON.parse(localStorage.getItem(k) || 'null');
@@ -61,6 +62,8 @@ if (!validGame(g)) {
 }
 const saveGame = () => write(KEY.game, g);
 let board = B.normalize(read(KEY.board, null));
+let tally = T.normalizeStore(read(KEY.tally, null));
+const saveTally = () => write(KEY.tally, tally);
 
 // ---------- roles and icons ----------
 // Geen namen: elke plaats heeft een rol en een eigen persoonsicoon.
@@ -137,6 +140,7 @@ function show(id) {
   if (id === 's-rules') buildRules();
   if (id === 's-settings') buildSettings();
   if (id === 's-score') buildScore();
+  if (id === 's-tally') buildTally();
   const scr = $(id);
   if (scr) {
     scr.scrollTop = 0;
@@ -182,13 +186,18 @@ function toTable() {
 }
 function back(from) {
   if (from === 'table' && g) toTable();
-  else show('s-home');
+  else show(from === 'table' ? 's-home' : from);
 }
 
 function refreshHome() {
   const has = !!g && !g.over;
   $('btn-resume').hidden = !has;
   if (has) $('resume-sub').textContent = `Met ${g.mode === 4 ? 'vier' : 'twee'} · ${teamLabel(0)} ${g.scores[0]}, ${teamLabel(1)} ${g.scores[1]} · ronde ${g.dealNo}`;
+  const t = tally.current;
+  if (t) {
+    const sc = T.replay(t).scores;
+    $('tally-sub').textContent = `${T.teamLabel(t, 0)} ${sc[0]}, ${T.teamLabel(t, 1)} ${sc[1]}`;
+  } else $('tally-sub').textContent = 'Voor als je met echte kaarten speelt';
 }
 
 document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => {
@@ -273,7 +282,7 @@ document.querySelector('.rules-nav').addEventListener('click', (e) => {
   if (t) t.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' });
 });
 
-// ---------- scoreboard screen ----------
+// ---------- results of games on screen ----------
 const sideNames = (mode) => (mode === 4 ? ['Wij', 'Zij'] : ['Jij', 'Tegen']);
 function trumpCell(l) {
   const x = l.winTeam !== null && l.mult > 1 ? `<span class="x">×${l.mult}</span>` : '';
@@ -299,7 +308,7 @@ function currentGameHTML() {
     </div>
     ${log.length ? roundsTable(log, g.mode) : ''}
     ${!done ? '<p class="sb-note">Nog geen ronde uitgespeeld.</p>' : ''}
-    ${missing ? '<p class="sb-note">Rondes van voor het scorebord staan hier niet bij.</p>' : ''}`;
+    ${missing ? '<p class="sb-note">De eerste rondes van dit spel staan hier niet bij.</p>' : ''}`;
 }
 function statHTML(mode) {
   const s = board.modes[mode];
@@ -344,6 +353,314 @@ function buildScore() {
     });
   });
 }
+
+// ---------- scoreboard for real cards ----------
+const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+let setup = null; // what is being filled in on the start form
+let editing = null; // index of the round being corrected
+let entry = null; // the round being filled in
+
+function teamHead(t, team) {
+  const n = T.teamNames(t, team);
+  return (n.length ? n : [T.teamLabel(t, team)]).map(esc).join('<br>');
+}
+function tallyTable(t, log, canEdit) {
+  const rows = log.slice().reverse().map((l) => {
+    const cell = (k) => `<td class="${k === 0 ? 'us' : 'them'}"><b>${l.scores[k]}</b>${l.winTeam === k ? `<small>+${l.gained}</small>` : ''}</td>`;
+    const num = canEdit ? `<button class="t-edit" data-edit="${l.n - 1}" aria-label="Ronde ${l.n} aanpassen">${l.n}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/></svg></button>` : l.n;
+    return `<tr><td class="sb-n">${num}</td><td class="sb-t">${l.winTeam !== null && l.mult > 1 ? `<span class="x">×${l.mult}</span>` : ''}</td><td class="sb-p">${l.winTeam === null ? 'gelijk' : `${l.taken[0]}–${l.taken[1]}`}</td>${cell(0)}${cell(1)}</tr>`;
+  }).join('');
+  return `<table class="sb-table t-table"><thead><tr><th scope="col">Ronde</th><th scope="col"><span class="sr-only">Telt keer</span></th><th scope="col">Punten</th><th scope="col" class="us">${teamHead(t, 0)}</th><th scope="col" class="them">${teamHead(t, 1)}</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function buildTally() {
+  if (tally.current) buildTallyGame();
+  else buildTallySetup();
+}
+
+// --- the start form ---
+function rulesSummary(r) {
+  const out = [];
+  if (r.zonderDubbel) out.push('zonder troef ×2');
+  if (r.blind) out.push('blind ×4');
+  if (r.meegaan) out.push('meegaan ×2 en terug ×2');
+  if (r.gelijkDubbel) out.push('na gelijk ×2');
+  if (r.alleSlagenDubbel) out.push('alle slagen ×2');
+  if (r.maxVier) out.push('hoogstens ×4');
+  return out.length ? `Zo rekent het: ${out.join(', ')}.` : 'Zo rekent het: elke ronde telt gewoon één keer.';
+}
+function setupDealers() {
+  const fake = { mode: setup.mode, names: setup.names.slice(0, setup.mode).map(T.cleanName) };
+  const order = Array.from({ length: setup.mode }, (_, p) => T.seatName(fake, p));
+  if (setup.dealer >= setup.mode) setup.dealer = 0;
+  $('t-dealers').innerHTML = order.map((n, p) => `<button type="button" data-dealer="${p}" aria-pressed="${setup.dealer === p}">${esc(n)}</button>`).join('');
+  if (setup.mode === 4) $('t-order').textContent = `De deler schuift op met de klok mee: ${order.join(', ')}. Klopt dat niet met hoe jullie zitten? Wissel dan de namen binnen een team.`;
+}
+function nameField(p, team) {
+  return `<input class="t-name" data-seat="${p}" value="${esc(setup.names[p] || '')}" maxlength="${T.NAME_MAX}" autocomplete="off" autocapitalize="words" enterkeyhint="next" placeholder="Naam" aria-label="Naam van ${setup.mode === 4 ? `speler ${team === 0 ? (p === 0 ? 1 : 2) : p === 1 ? 1 : 2} van team ${team + 1}` : `speler ${team + 1}`}">`;
+}
+function buildTallySetup() {
+  if (!setup) {
+    const l = tally.last;
+    setup = { mode: l ? l.mode : 4, names: l ? [...l.names, '', '', ''].slice(0, 4) : ['', '', '', ''], target: l ? l.target : rules.target, dealer: 0 };
+  }
+  const four = setup.mode === 4;
+  const teams = four
+    ? `<div class="t-team us"><h3>Team 1</h3>${nameField(0, 0)}${nameField(2, 0)}</div><div class="t-team them"><h3>Team 2</h3>${nameField(1, 1)}${nameField(3, 1)}</div>`
+    : `<div class="t-team us"><h3>Speler 1</h3>${nameField(0, 0)}</div><div class="t-team them"><h3>Speler 2</h3>${nameField(1, 1)}</div>`;
+  const any = tally.recent.length > 0 || !!tally.last;
+  $('tally-body').innerHTML = `<p class="sb-note">Speel je met echte kaarten? Vul na elke ronde de punten in, dan rekent dit scorebord de stand uit.</p>
+    <div class="seg t-seg" role="group" aria-label="Aantal spelers"><button type="button" data-mode="4" aria-pressed="${four}">Met vier</button><button type="button" data-mode="2" aria-pressed="${!four}">Met twee</button></div>
+    <p class="sub-h">Namen</p>
+    <div class="t-teams">${teams}</div>
+    <p class="sb-note" id="t-order"></p>
+    <p class="sub-h">Wie deelt eerst?</p>
+    <div class="seg t-seg t-dealers" id="t-dealers" role="group" aria-label="Wie deelt eerst"></div>
+    <p class="sub-h">Spelen tot</p>
+    <div class="seg t-seg" role="group" aria-label="Spelen tot">${E.TARGETS.map((n) => `<button type="button" data-target="${n}" aria-pressed="${setup.target === n}">${n}</button>`).join('')}</div>
+    <p class="sb-note">${rulesSummary(rules)} <button type="button" class="t-link" id="t-rules">Varianten aanpassen</button></p>
+    <button class="btn btn-main" id="t-start">Start</button>
+    ${tallyRecentHTML()}
+    ${any ? '<button class="btn btn-ghost" id="t-wipe">Namen en uitslagen wissen</button>' : ''}`;
+  setupDealers();
+}
+function tallyRecentHTML() {
+  if (!tally.recent.length) return '';
+  return `<p class="sub-h">Laatste spellen</p><div class="sb-recent">${tally.recent.map((r) => {
+    const a = esc(T.teamLabel(r, 0));
+    const b = esc(T.teamLabel(r, 1));
+    const n = r.log.length;
+    return `<details class="sb-game"><summary><span class="t-vs">${a} <i>tegen</i> ${b}</span><b class="sb-final">${r.scores[0]}–${r.scores[1]}</b><small>${r.winner === 0 ? a : b} ${T.teamNames(r, r.winner).length > 1 || (!T.teamNames(r, r.winner).length && r.mode === 4) ? 'wonnen' : 'won'} · ${dateFmt(r.at)} · ${n} ${n === 1 ? 'ronde' : 'rondes'}</small></summary>${tallyTable(r, r.log, false)}</details>`;
+  }).join('')}</div>`;
+}
+
+// --- the game ---
+function blankEntry() {
+  return { a: '', b: '', zonder: false, blind: false, mee: false, terug: false, alle: true };
+}
+function entryRound() {
+  const a = entry.a === '' ? NaN : +entry.a;
+  const b = entry.b === '' ? NaN : +entry.b;
+  const r = { taken: [a, b], zonder: entry.zonder, blind: entry.blind, mee: entry.mee, terug: entry.mee && entry.terug, alle: false };
+  if (T.validRound(r) && (a === 60 || b === 60) && tally.current.rules.alleSlagenDubbel) r.alle = entry.alle;
+  return r;
+}
+function chip(key, label, x) {
+  return `<button type="button" class="t-chip" data-flag="${key}" aria-pressed="${!!entry[key]}">${label} <b>×${x}</b></button>`;
+}
+function entryHTML(t, r) {
+  const idx = editing == null ? t.rounds.length : editing;
+  const carry = T.replay(t, idx).carry;
+  const chips = [];
+  if (t.rules.zonderDubbel) chips.push(chip('zonder', 'Zonder troef', 2));
+  if (t.rules.blind) chips.push(chip('blind', 'Blind', 4));
+  if (t.rules.meegaan) chips.push(chip('mee', 'Meegegaan', 2), chip('terug', 'Terug', 2));
+  if (t.rules.alleSlagenDubbel) chips.push(chip('alle', 'Alle slagen', 2));
+  const dealer = esc(T.seatName(t, T.dealerOf(t, idx)));
+  return `<form class="t-entry" id="t-form" novalidate>
+    <h3>${editing == null ? `Ronde ${idx + 1}` : `Ronde ${idx + 1} aanpassen`}<small>${dealer} ${editing == null ? 'deelt' : 'deelde'}</small></h3>
+    ${chips.length ? `<div class="t-chips">${chips.join('')}</div>` : ''}
+    ${carry && t.rules.gelijkDubbel ? `<p class="sb-note">Na ${carry === 1 ? 'een gelijke ronde' : `${carry} gelijke rondes`} telt deze ronde ×${2 ** carry}.</p>` : ''}
+    <div class="t-pts">
+      <label class="us"><span>${esc(T.teamLabel(t, 0))}</span><input id="t-a" inputmode="numeric" maxlength="2" autocomplete="off" enterkeyhint="done" value="${entry.a}" aria-label="Kaartpunten van ${esc(T.teamLabel(t, 0))}"></label>
+      <label class="them"><span>${esc(T.teamLabel(t, 1))}</span><input id="t-b" inputmode="numeric" maxlength="2" autocomplete="off" enterkeyhint="done" value="${entry.b}" aria-label="Kaartpunten van ${esc(T.teamLabel(t, 1))}"></label>
+    </div>
+    <p class="sb-note t-hint">Tel de kaartpunten van één kant. De andere kant vult zichzelf in, samen is dat altijd 60.</p>
+    <p class="t-preview" id="t-preview" aria-live="polite"></p>
+    <button type="submit" class="btn btn-main" id="t-add">${editing == null ? 'Ronde toevoegen' : 'Bewaren'}</button>
+    ${editing == null ? '' : '<div class="t-row"><button type="button" class="btn btn-ghost" id="t-cancel">Annuleren</button><button type="button" class="btn btn-ghost" id="t-del">Verwijderen</button></div>'}
+  </form>`;
+}
+function buildTallyGame() {
+  const t = tally.current;
+  const r = T.replay(t);
+  const series = tally.last && (tally.last.series[0] || tally.last.series[1]) ? tally.last.series : null;
+  const a = esc(T.teamLabel(t, 0));
+  const b = esc(T.teamLabel(t, 1));
+  if (!entry) entry = blankEntry();
+  let main;
+  if (r.over && editing == null) {
+    main = `<div class="t-win"><p class="eyebrow">Einde van het spel</p><h3>${esc(T.teamLabel(t, r.winner))}</h3><p>${T.teamNames(t, r.winner).length > 1 || (!T.teamNames(t, r.winner).length && t.mode === 4) ? 'halen' : 'haalt'} als eerste ${t.rules.target}.</p>
+      <button class="btn btn-main" id="t-again">Nog een spel</button><button class="btn btn-ghost" id="t-others">Andere spelers</button>
+      <p class="sb-note">Foutje gemaakt? Tik op een ronde om ze aan te passen.</p></div>`;
+  } else main = entryHTML(t);
+  $('tally-body').innerHTML = `<div class="sb-now t-now" role="img" aria-label="Stand: ${a} ${r.scores[0]}, ${b} ${r.scores[1]}, spelen tot ${t.rules.target}${series ? `. Gewonnen spellen: ${series[0]} tegen ${series[1]}` : ''}">
+      <span class="us"><small>${teamHead(t, 0)}</small><b>${r.scores[0]}</b></span>
+      <span class="sb-goal">tot ${t.rules.target}${series ? `<small class="t-series">spellen<br>${series[0]}–${series[1]}</small>` : ''}</span>
+      <span class="them"><small>${teamHead(t, 1)}</small><b>${r.scores[1]}</b></span>
+    </div>
+    ${main}
+    ${r.log.length ? tallyTable(t, r.log, true) : ''}
+    ${r.over ? '' : '<button class="btn btn-ghost" id="t-stop">Spel stoppen</button>'}`;
+  if (!r.over || editing != null) updateEntry();
+}
+function updateEntry() {
+  const t = tally.current;
+  if (!$('t-form')) return;
+  const round = entryRound();
+  const ok = T.validRound(round);
+  const sixty = entry.a === '60' || entry.b === '60';
+  document.querySelectorAll('.t-chip').forEach((c) => {
+    const k = c.dataset.flag;
+    c.setAttribute('aria-pressed', String(k === 'alle' ? sixty && !!entry.alle : !!entry[k]));
+    if (k === 'alle') c.hidden = !sixty;
+    if (k === 'terug') c.disabled = !entry.mee;
+  });
+  $('t-add').disabled = !ok;
+  const out = $('t-preview');
+  if (!ok) {
+    out.innerHTML = '';
+    return;
+  }
+  const idx = editing == null ? t.rounds.length : editing;
+  const s = T.scoreRound(t.rules, round, T.replay(t, idx).carry);
+  if (s.tie) out.innerHTML = `Gelijk: niemand krijgt punten.${t.rules.gelijkDubbel ? ' De volgende ronde telt dubbel.' : ''}`;
+  else out.innerHTML = `Erbij voor <b class="${s.winTeam === 0 ? 'us' : 'them'}">${esc(T.teamLabel(t, s.winTeam))}</b>: ${s.mult > 1 ? `${s.base} × ${s.mult} = ` : ''}<b class="${s.winTeam === 0 ? 'us' : 'them'}">+${s.gained}</b>`;
+}
+function startEdit(i) {
+  const t = tally.current;
+  const x = t.rounds[i];
+  if (!x) return;
+  editing = i;
+  entry = { a: String(x.taken[0]), b: String(x.taken[1]), zonder: !!x.zonder, blind: !!x.blind, mee: !!x.mee, terug: !!x.terug, alle: x.taken.includes(60) ? !!x.alle : true };
+  buildTallyGame();
+  $('s-tally').scrollTop = 0;
+  $('t-a').focus({ preventScroll: true });
+}
+function stopEdit() {
+  editing = null;
+  entry = null;
+  buildTallyGame();
+}
+function submitRound() {
+  const t = tally.current;
+  const round = entryRound();
+  if (!T.validRound(round)) return;
+  const wasOver = T.replay(t).over;
+  if (editing == null) t.rounds.push(round);
+  else t.rounds[editing] = round;
+  saveTally();
+  editing = null;
+  entry = null;
+  const r = T.replay(t);
+  sfx(r.over && !wasOver ? 'win' : 'round');
+  haptic(10);
+  announce(`Stand: ${T.teamLabel(t, 0)} ${r.scores[0]}, ${T.teamLabel(t, 1)} ${r.scores[1]}.${r.over ? ` ${T.teamLabel(t, r.winner)} wint.` : ''}`);
+  buildTallyGame();
+  $('s-tally').scrollTop = 0;
+}
+function confirmSheet(title, text, yes, cb) {
+  overlay(`<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dlg-t"><h3 id="dlg-t">${title}</h3><p>${text}</p>
+    <div class="row"><button class="btn btn-ghost" data-x="no">Nee</button><button class="btn btn-main" data-x="yes">${yes}</button></div></div>`, (x) => {
+    closeOverlay();
+    if (x === 'yes') cb();
+  });
+}
+
+$('tally-back').addEventListener('click', () => {
+  editing = null;
+  entry = null;
+  show('s-home');
+});
+$('tally-body').addEventListener('submit', (e) => {
+  e.preventDefault();
+  submitRound();
+});
+$('tally-body').addEventListener('input', (e) => {
+  const el = e.target;
+  if (el.dataset && el.dataset.seat) {
+    setup.names[+el.dataset.seat] = el.value;
+    setupDealers();
+    return;
+  }
+  if (el.id !== 't-a' && el.id !== 't-b') return;
+  el.value = el.value.replace(/\D/g, '').slice(0, 2);
+  if (el.value !== '' && +el.value > 60) el.value = '60';
+  if (el.value !== '') el.value = String(+el.value);
+  const other = $(el.id === 't-a' ? 't-b' : 't-a');
+  other.value = el.value === '' ? '' : String(60 - +el.value);
+  entry.a = $('t-a').value;
+  entry.b = $('t-b').value;
+  if (entry.a === '60' || entry.b === '60') entry.alle = true;
+  updateEntry();
+});
+$('tally-body').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const t = tally.current;
+  if (b.dataset.mode) {
+    setup.mode = +b.dataset.mode;
+    buildTallySetup();
+  } else if (b.dataset.target) {
+    setup.target = +b.dataset.target;
+    b.parentElement.querySelectorAll('button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  } else if (b.dataset.dealer) {
+    setup.dealer = +b.dataset.dealer;
+    setupDealers();
+  } else if (b.dataset.flag) {
+    const k = b.dataset.flag;
+    entry[k] = !entry[k];
+    if (k === 'zonder' && entry.zonder) entry.blind = false;
+    if (k === 'blind' && entry.blind) entry.zonder = false;
+    if (k === 'mee' && !entry.mee) entry.terug = false;
+    updateEntry();
+  } else if (b.dataset.edit) startEdit(+b.dataset.edit);
+  else if (b.id === 't-start') {
+    T.startGame(tally, { mode: setup.mode, names: setup.names, target: setup.target, rules, firstDealer: setup.dealer, id: newId() });
+    setup = null;
+    entry = null;
+    editing = null;
+    saveTally();
+    buildTally();
+    $('s-tally').scrollTop = 0;
+  } else if (b.id === 't-rules') {
+    toScreen('s-rules', 's-tally');
+    requestAnimationFrame(() => {
+      const v = $('r-var');
+      if (v) v.scrollIntoView({ behavior: 'auto', block: 'start' });
+    });
+  } else if (b.id === 't-cancel') stopEdit();
+  else if (b.id === 't-del') {
+    const i = editing;
+    confirmSheet(`Ronde ${i + 1} verwijderen?`, 'De stand wordt opnieuw uitgerekend.', 'Ja, verwijderen', () => {
+      t.rounds.splice(i, 1);
+      saveTally();
+      stopEdit();
+    });
+  } else if (b.id === 't-again') {
+    const n = T.nextGame(tally, newId());
+    if (n) {
+      entry = null;
+      saveTally();
+      buildTally();
+      $('s-tally').scrollTop = 0;
+    }
+  } else if (b.id === 't-others') {
+    T.finishGame(tally);
+    setup = null;
+    entry = null;
+    saveTally();
+    buildTally();
+    $('s-tally').scrollTop = 0;
+  } else if (b.id === 't-stop') {
+    confirmSheet('Spel stoppen?', 'Dit spel verdwijnt en telt niet mee bij de uitslagen.', 'Ja, stoppen', () => {
+      tally.current = null;
+      setup = null;
+      editing = null;
+      entry = null;
+      saveTally();
+      buildTally();
+    });
+  } else if (b.id === 't-wipe') {
+    confirmSheet('Alles wissen?', 'De namen en alle uitslagen van dit scorebord verdwijnen. Dit kun je niet ongedaan maken.', 'Ja, wissen', () => {
+      tally = T.emptyStore();
+      setup = null;
+      write(KEY.tally, null);
+      buildTally();
+    });
+  }
+});
 
 // ---------- settings screen ----------
 function segHTML(key, opts, label) {
@@ -435,7 +752,7 @@ function openPause() {
   overlay(`<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dlg-t"><h3 id="dlg-t">Pauze</h3>
     <p>${teamLabel(0)} <b class="us-t">${g.scores[0]}</b> · ${teamLabel(1)} <b>${g.scores[1]}</b> · tot ${g.rules.target}</p>
     <button class="btn btn-main" data-x="go">Verder spelen</button>
-    <button class="btn btn-ghost" data-x="score">Scorebord</button>
+    <button class="btn btn-ghost" data-x="score">Uitslagen</button>
     <div class="row"><button class="btn btn-ghost" data-x="settings">Instellingen</button><button class="btn btn-ghost" data-x="rules">Spelregels</button></div>
     <div class="row"><button class="btn btn-ghost" data-x="again">Nieuw spel</button><button class="btn btn-ghost" data-x="home">Menu</button></div>
     <p class="fine">Je spel blijft bewaard, ook als je de pagina sluit.</p></div>`, (x) => {
@@ -544,7 +861,7 @@ function renderHud(pd) {
   const trumpName = d.trump === undefined ? 'nog niet gekozen' : d.trump === null ? (d.blind ? 'blind zonder troef' : 'zonder troef') : E.SUIT_NAME[d.trump];
   $('h-mid').setAttribute('aria-label', `Troef: ${trumpName}${m > 1 ? `, deze ronde telt ${m} keer` : ''}. Tik voor uitleg.`);
   $('h-score').innerHTML = `<small>Stand</small><div class="sc2"><b class="us">${g.scores[0]}</b><span>–</span><b class="them">${g.scores[1]}</b></div><small>tot ${g.rules.target}</small>`;
-  $('h-score').setAttribute('aria-label', `Stand: ${teamLabel(0)} ${g.scores[0]}, ${teamLabel(1)} ${g.scores[1]}, spelen tot ${g.rules.target}. Open het scorebord.`);
+  $('h-score').setAttribute('aria-label', `Stand: ${teamLabel(0)} ${g.scores[0]}, ${teamLabel(1)} ${g.scores[1]}, spelen tot ${g.rules.target}. Open de uitslagen.`);
   renderBar(pd);
 }
 
@@ -1407,7 +1724,7 @@ function showDealEnd() {
       <p class="lead">${won ? (g.mode === 4 ? 'Jij en je partner halen' : 'Jij haalt') : g.mode === 4 ? 'De tegenpartij haalt' : 'De tegenspeler haalt'} als eerste ${g.rules.target}. ${head}.</p>
       ${body}
       <p class="fine">Met ${g.mode === 4 ? 'vier' : 'twee'}: ${tally.won} gewonnen, ${tally.lost} verloren.</p>
-      <button class="btn btn-ghost" data-x="score">Scorebord</button>
+      <button class="btn btn-ghost" data-x="score">Uitslagen</button>
       <div class="row row-next"><button class="btn btn-ghost" data-x="home">Menu</button><button class="btn btn-main" data-x="again">Nog een spel</button></div></div>`, (x) => {
       closeOverlay();
       if (x === 'score') {
@@ -1426,7 +1743,7 @@ function showDealEnd() {
   if (firstTime) sfx(goodForUs ? 'round' : 'trick-them');
   overlay(`<div class="sheet sheet-end" role="dialog" aria-modal="true" aria-labelledby="dlg-t"><p class="eyebrow">Ronde ${g.dealNo}</p><h3 id="dlg-t" class="${goodForUs ? 'win' : ''}">${head}</h3>
     ${body}
-    <div class="row row-next"><button class="btn btn-ghost" data-x="score">Scorebord</button><button class="btn btn-main" data-x="next">Volgende ronde</button></div></div>`, (x) => {
+    <div class="row row-next"><button class="btn btn-ghost" data-x="score">Uitslagen</button><button class="btn btn-main" data-x="next">Volgende ronde</button></div></div>`, (x) => {
     closeOverlay();
     if (x === 'score') {
       toScreen('s-score', 'table');
@@ -1613,6 +1930,6 @@ $('logo').innerHTML = ['kH', 'h10', 'sA'].map((c) => cardHTML(c)).join('');
 applyView();
 
 // Test hook for automated checks (harmless in normal play).
-window.__mn = { get g() { return g; }, get board() { return board; }, E, archive, step, newGame, tip: () => decidePlayWhy(g, 0) };
+window.__mn = { get g() { return g; }, get board() { return board; }, get tally() { return tally; }, E, archive, step, newGame, tip: () => decidePlayWhy(g, 0) };
 
 toMenu();

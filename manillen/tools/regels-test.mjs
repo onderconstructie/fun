@@ -6,6 +6,7 @@ import * as E from '../js/engine.js';
 import { decide, decidePlayWhy } from '../js/ai.js';
 import { makeRng } from '../js/util.js';
 import * as B from '../js/scoreboard.js';
+import * as T from '../js/tally.js';
 
 let ok = 0;
 let fail = 0;
@@ -260,6 +261,85 @@ t('veel rondes gespeeld', deals > 1000);
     }
     return Array.isArray(g.log) && g.log.length === 1;
   })());
+}
+
+// ---- scorebord voor echte kaarten: rekent exact als het spel ----
+{
+  const rng = makeRng(777);
+  const sets = [R, { ...R, blind: true }, { ...R, maxVier: true }, { ...R, zonderDubbel: false, gelijkDubbel: false }, { ...R, alleSlagenDubbel: false, meegaan: false }, { ...R, blind: true, maxVier: true, target: 61 }];
+  let compared = 0;
+  let same_ = true;
+  for (let i = 0; i < 120; i++) {
+    const rules = sets[i % sets.length];
+    const mode = i % 3 === 0 ? 2 : 4;
+    const g = E.createGame(mode, rules, rng);
+    E.startDeal(g, rng);
+    const store = T.emptyStore();
+    const t = T.startGame(store, { mode, names: ['a', 'b', 'c', 'd'], target: rules.target, rules, firstDealer: g.dealer, id: 'x' });
+    const dealers = [g.dealer];
+    let guard = 0;
+    const take = () => {
+      const d = g.deal;
+      const lost = d.won[0] === 0 ? 0 : d.won[1] === 0 ? 1 : null;
+      t.rounds.push({ taken: d.taken.slice(), zonder: d.trump === null && !d.blind, blind: !!d.blind, mee: d.mee != null, terug: d.terug != null, alle: lost !== null });
+      const r = T.replay(t);
+      compared++;
+      if (r.scores[0] !== g.scores[0] || r.scores[1] !== g.scores[1] || r.carry !== g.carry || r.over !== g.over || (g.over && r.winner !== g.winner)) same_ = false;
+    };
+    while (!g.over && guard++ < 50000) {
+      const pd = E.pending(g);
+      if (pd.type === 'trick') {
+        E.act(g, { type: 'trick' });
+        if (g.deal.phase === 'end') take();
+      } else if (pd.type === 'end') {
+        E.act(g, { type: 'end', rng });
+        dealers.push(g.dealer);
+      } else E.act(g, decide(g, pd));
+    }
+    dealers.forEach((dl, k) => {
+      if (T.dealerOf(t, k) !== dl) same_ = false;
+    });
+  }
+  t('scorebord rekent exact als het spel', same_ && compared > 500);
+
+  const s = T.emptyStore();
+  const b = T.startGame(s, { mode: 4, names: ['  Jan ', 'Lies', 'Piet', 'Een veel te lange naam hier'], target: 61, rules: R, firstDealer: 1, id: 'a' });
+  t('namen worden opgeschoond', b.names[0] === 'Jan' && b.names[3].length === T.NAME_MAX);
+  t('team is 0 en 2, 1 en 3', T.teamLabel(b, 0) === 'Jan & Piet' && T.teamLabel(b, 1).startsWith('Lies & '));
+  t('zonder namen: wij en zij', T.teamLabel({ mode: 4, names: ['', '', '', ''] }, 1) === 'Zij' && T.teamLabel({ mode: 2, names: ['', 'Tom'] }, 0) === 'Speler 1');
+  t('deler schuift op', T.dealerOf(b, 0) === 1 && T.dealerOf(b, 3) === 0);
+  t('ongeldige ronde: samen geen 60', !T.validRound({ taken: [30, 31] }) && !T.validRound({ taken: [61, -1] }) && !T.validRound({ taken: [NaN, NaN] }) && T.validRound({ taken: [60, 0] }));
+  t('finish kan niet tijdens het spel', T.finishGame(s) === false && s.current === b);
+  b.rounds.push({ taken: [37, 23] });
+  t('37-23 geeft 7', T.replay(b).scores[0] === 7);
+  b.rounds.push({ taken: [37, 23], zonder: true, mee: true });
+  t('zonder troef en meegaan: 28', T.replay(b).log[1].gained === 28 && T.replay(b).scores[0] === 35);
+  b.rounds.push({ taken: [30, 30] });
+  t('gelijk: geen punten, volgende dubbel', T.replay(b).scores[0] === 35 && T.replay(b).carry === 1);
+  b.rounds.push({ taken: [20, 40] });
+  t('na gelijk dubbel', T.replay(b).log[3].gained === 20 && T.replay(b).scores[1] === 20 && T.replay(b).carry === 0);
+  b.rounds[0] = { taken: [23, 37] };
+  t('aanpassen rekent alles opnieuw', T.replay(b).scores[0] === 28 && T.replay(b).scores[1] === 27);
+  b.rounds.splice(2, 1);
+  t('verwijderen rekent alles opnieuw', T.replay(b).log[2].gained === 10 && T.replay(b).log[2].n === 3);
+  b.rounds.push({ taken: [60, 0], alle: true }, { taken: [60, 0], alle: false });
+  const big = T.replay(b);
+  t('alle slagen dubbel, 60 zonder alle slagen niet', big.log[3].gained === 60 && big.over && big.winner === 0);
+  const firstOver = T.startGame(T.emptyStore(), { mode: 2, names: ['x', 'y'], target: 61, rules: R, firstDealer: 0, id: 'f' });
+  firstOver.rounds.push({ taken: [60, 0], alle: true }, { taken: [60, 0], alle: true }, { taken: [0, 60], alle: true }, { taken: [0, 60], alle: true });
+  t('wie eerst aan het doel is, wint', T.replay(firstOver).winner === 0);
+  b.rounds.length = 0;
+  b.rounds.push({ taken: [60, 0], alle: true }, { taken: [60, 0], alle: true }, { taken: [31, 29] });
+  const n1 = T.nextGame(s, 'b');
+  t('nog een spel: zelfde namen, deler schuift, reeks telt', n1 && n1.names[0] === 'Jan' && n1.firstDealer === 0 && s.last.series[0] === 1 && s.recent.length === 1 && s.recent[0].scores[0] === 121);
+  const stored = T.normalizeStore(JSON.parse(JSON.stringify(s)));
+  t('bewaren en terughalen', JSON.stringify(stored) === JSON.stringify(s));
+  T.startGame(s, { mode: 4, names: ['Ann', 'Lies', 'Piet', 'Tom'], target: 61, rules: R, firstDealer: 0, id: 'c' });
+  t('andere namen: reeks begint opnieuw', s.last.series[0] === 0 && s.recent.length === 1);
+  for (const bad of [null, 7, {}, { v: 1, current: { mode: 3 } }, { v: 1, current: { mode: 4, names: ['a'], rules: {}, firstDealer: 0, rounds: [] }, last: { mode: 9 }, recent: [{}, null] }, { v: 1, current: { mode: 2, names: ['a', 'b'], rules: { target: 101 }, firstDealer: 0, rounds: [{ taken: [1, 2] }] } }]) {
+    const n = T.normalizeStore(bad);
+    t('kapotte opslag van scorebord wordt leeg', n.current === null && n.last === null && n.recent.length === 0);
+  }
 }
 
 console.log(`${ok} goed, ${fail} fout · ${deals} rondes, ${moves} computerzetten nagekeken`);
