@@ -678,6 +678,9 @@ body.four-color .sb-suit.s-k .sicon { fill: var(--card-green); }
 #s-tally input:focus { outline: 3px solid #8ec5ff; outline-offset: 1px; }
 .t-seg { margin-top: 0; }
 #t-order:empty { display: none; }
+#tally-share[hidden] { display: none; }
+.t-share-game { width: calc(100% - 28px) !important; margin: 10px 14px 14px !important; }
+.t-copy { width: 100%; padding: 10px 12px; font-family: var(--body); font-size: 15px; line-height: 1.4; color: var(--text); background: rgba(0,0,0,0.3); border: 1px solid var(--line); border-radius: 12px; resize: none; -webkit-user-select: text; user-select: text; }
 .t-dealers { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }
 .t-dealers button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .t-teams { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }

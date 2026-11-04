@@ -375,9 +375,42 @@ function tallyTable(t, log, canEdit) {
 }
 
 function buildTally() {
+  $('tally-share').hidden = true;
   if (tally.current) buildTallyGame();
   else buildTallySetup();
 }
+
+// --- sharing ---
+const appUrl = () => new URL('./', location.href).href;
+function shareCurrent() {
+  const t = tally.current;
+  if (!t) return;
+  const r = T.replay(t);
+  const series = tally.last && (tally.last.series[0] || tally.last.series[1]) ? tally.last.series : null;
+  sendText(T.shareText({ players: t, log: r.log, scores: r.scores, target: t.rules.target, winner: r.winner, series, url: appUrl() }));
+}
+async function sendText(text) {
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: 'Manillen', text });
+      return;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return; // the person closed the share menu
+    }
+  }
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(text);
+    copied = true;
+  } catch (e) {
+    /* not allowed here: show the text instead */
+  }
+  const body = copied
+    ? `<h3 id="dlg-t">Gekopieerd</h3><p>De stand staat op je klembord. Plak ze in een bericht.</p>`
+    : `<h3 id="dlg-t">Kopieer deze tekst</h3><textarea class="t-copy" readonly rows="8" aria-label="Tekst om te delen">${esc(text)}</textarea>`;
+  overlay(`<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dlg-t">${body}<button class="btn btn-main" data-x="ok">Oké</button></div>`, () => closeOverlay());
+}
+$('tally-share').addEventListener('click', shareCurrent);
 
 // --- the start form ---
 function rulesSummary(r) {
@@ -427,11 +460,11 @@ function buildTallySetup() {
 }
 function tallyRecentHTML() {
   if (!tally.recent.length) return '';
-  return `<p class="sub-h">Laatste spellen</p><div class="sb-recent">${tally.recent.map((r) => {
+  return `<p class="sub-h">Laatste spellen</p><div class="sb-recent">${tally.recent.map((r, i) => {
     const a = esc(T.teamLabel(r, 0));
     const b = esc(T.teamLabel(r, 1));
     const n = r.log.length;
-    return `<details class="sb-game"><summary><span class="t-vs">${a} <i>tegen</i> ${b}</span><b class="sb-final">${r.scores[0]}–${r.scores[1]}</b><small>${r.winner === 0 ? a : b} ${T.teamNames(r, r.winner).length > 1 || (!T.teamNames(r, r.winner).length && r.mode === 4) ? 'wonnen' : 'won'} · ${dateFmt(r.at)} · ${n} ${n === 1 ? 'ronde' : 'rondes'}</small></summary>${tallyTable(r, r.log, false)}</details>`;
+    return `<details class="sb-game"><summary><span class="t-vs">${a} <i>tegen</i> ${b}</span><b class="sb-final">${r.scores[0]}–${r.scores[1]}</b><small>${r.winner === 0 ? a : b} ${T.isPlural(r, r.winner) ? 'wonnen' : 'won'} · ${dateFmt(r.at)} · ${n} ${n === 1 ? 'ronde' : 'rondes'}</small></summary>${tallyTable(r, r.log, false)}<button class="btn btn-ghost t-share-game" data-share="${i}">Deze uitslag delen</button></details>`;
   }).join('')}</div>`;
 }
 
@@ -481,8 +514,8 @@ function buildTallyGame() {
   if (!entry) entry = blankEntry();
   let main;
   if (r.over && editing == null) {
-    main = `<div class="t-win"><p class="eyebrow">Einde van het spel</p><h3>${esc(T.teamLabel(t, r.winner))}</h3><p>${T.teamNames(t, r.winner).length > 1 || (!T.teamNames(t, r.winner).length && t.mode === 4) ? 'halen' : 'haalt'} als eerste ${t.rules.target}.</p>
-      <button class="btn btn-main" id="t-again">Nog een spel</button><button class="btn btn-ghost" id="t-others">Andere spelers</button>
+    main = `<div class="t-win"><p class="eyebrow">Einde van het spel</p><h3>${esc(T.teamLabel(t, r.winner))}</h3><p>${T.isPlural(t, r.winner) ? 'halen' : 'haalt'} als eerste ${t.rules.target}.</p>
+      <button class="btn btn-main" id="t-again">Nog een spel</button><button class="btn btn-ghost" id="t-share">Uitslag delen</button><button class="btn btn-ghost" id="t-others">Andere spelers</button>
       <p class="sb-note">Foutje gemaakt? Tik op een ronde om ze aan te passen.</p></div>`;
   } else main = entryHTML(t);
   $('tally-body').innerHTML = `<div class="sb-now t-now" role="img" aria-label="Stand: ${a} ${r.scores[0]}, ${b} ${r.scores[1]}, spelen tot ${t.rules.target}${series ? `. Gewonnen spellen: ${series[0]} tegen ${series[1]}` : ''}">
@@ -494,6 +527,8 @@ function buildTallyGame() {
     ${r.log.length ? tallyTable(t, r.log, true) : ''}
     ${r.over ? '' : '<button class="btn btn-ghost" id="t-stop">Spel stoppen</button>'}`;
   if (!r.over || editing != null) updateEntry();
+  $('tally-share').hidden = !r.log.length;
+  $('tally-share').setAttribute('aria-label', r.over ? 'Uitslag delen' : 'Stand delen');
 }
 function updateEntry() {
   const t = tally.current;
@@ -606,6 +641,10 @@ $('tally-body').addEventListener('click', (e) => {
     if (k === 'mee' && !entry.mee) entry.terug = false;
     updateEntry();
   } else if (b.dataset.edit) startEdit(+b.dataset.edit);
+  else if (b.dataset.share) {
+    const x = tally.recent[+b.dataset.share];
+    if (x) sendText(T.shareText({ players: x, log: x.log, scores: x.scores, target: x.target, winner: x.winner, url: appUrl() }));
+  } else if (b.id === 't-share') shareCurrent();
   else if (b.id === 't-start') {
     T.startGame(tally, { mode: setup.mode, names: setup.names, target: setup.target, rules, firstDealer: setup.dealer, id: newId() });
     setup = null;

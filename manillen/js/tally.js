@@ -18,6 +18,10 @@ export function teamLabel(t, team) {
   if (n.length) return n.join(' & ');
   return t.mode === 4 ? ['Wij', 'Zij'][team] : `Speler ${team + 1}`;
 }
+export const isPlural = (t, team) => {
+  const n = teamNames(t, team).length;
+  return n > 1 || (n === 0 && t.mode === 4);
+};
 export const dealerOf = (t, roundIndex) => (t.firstDealer + roundIndex) % t.mode;
 
 export function validRound(r) {
@@ -53,6 +57,24 @@ export function replay(t, upTo = t.rounds.length) {
     if (winner === null && (scores[0] >= t.rules.target || scores[1] >= t.rules.target)) winner = scores[0] >= t.rules.target ? 0 : 1;
   });
   return { log, scores, carry, over: winner !== null, winner };
+}
+
+// Plain text to send to others: the stand, every round, and where the game is.
+export function shareText({ players, log, scores, target, winner = null, series = null, url = '' }) {
+  const a = teamLabel(players, 0);
+  const b = teamLabel(players, 1);
+  const n = log.length;
+  const lines = [winner === null ? `Manillen: tussenstand na ${n} ${n === 1 ? 'ronde' : 'rondes'}` : `Manillen: eindstand na ${n} ${n === 1 ? 'ronde' : 'rondes'}`];
+  if (winner !== null) lines.push(`${teamLabel(players, winner)} ${isPlural(players, winner) ? 'winnen' : 'wint'}!`);
+  lines.push('', `${a}: ${scores[0]}`, `${b}: ${scores[1]}`, `Spelen tot ${target}`);
+  if (series) lines.push(`Gewonnen spellen: ${series[0]}-${series[1]}`);
+  if (n) lines.push('');
+  for (const l of log) {
+    if (l.winTeam === null) lines.push(`Ronde ${l.n}: gelijk (30-30)`);
+    else lines.push(`Ronde ${l.n}: ${l.taken[0]}-${l.taken[1]}${l.mult > 1 ? ` x${l.mult}` : ''}, +${l.gained} voor ${teamLabel(players, l.winTeam)}`);
+  }
+  if (url) lines.push('', url);
+  return lines.join('\n');
 }
 
 export const emptyStore = () => ({ v: 1, current: null, last: null, recent: [] });
